@@ -8,7 +8,7 @@ namespace TrrntzipDN
     {
         public static TrrntZipStatus ReZipFiles(List<ZippedFile> zippedFiles, ZipFile originalZipFile, byte[] buffer)
         {
-            int BufferSize = buffer.Length;
+            int bufferSize = buffer.Length;
 
             string filename = originalZipFile.ZipFilename;
 
@@ -47,7 +47,7 @@ namespace TrrntzipDN
                 ulong sizetogo = streamSize;
                 while (sizetogo > 0)
                 {
-                    int sizenow = sizetogo > (ulong)BufferSize ? BufferSize : (int)sizetogo;
+                    int sizenow = sizetogo > (ulong)bufferSize ? bufferSize : (int)sizetogo;
 
                     crcCs.Read(buffer, 0, sizenow);
                     writeStream.Write(buffer, 0, sizenow);

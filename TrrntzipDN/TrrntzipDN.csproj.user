@@ -4,7 +4,7 @@
     <StartArguments>-g -f "D:\Personal\MAME 0.173 EXTRAs"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
-    <StartArguments>-g %2a.zip</StartArguments>
+    <StartArguments>-g -f "D:\Personal\MAME 0.173 EXTRAs"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <StartArguments>-g %2a.%2a</StartArguments>

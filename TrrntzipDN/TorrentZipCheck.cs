@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 
 /***************************************************************************************************************
 
@@ -11,7 +10,7 @@ using System.ComponentModel;
     
     2)  All Files in a torrentzip should be sorted with a lowercase file compare.
 
-    3)  Directory Maker files are only needed if they are empty directories.
+    3)  Directory Marker files are only needed if they are empty directories.
 
     4)  Also check for repeating files. (This is just a bad thing, which should never happen in a zip file)
 
@@ -32,7 +31,7 @@ namespace TrrntzipDN
             // check if any '\' = 92 need converted to '/' = 47
             // this needs done before the sort, so that the sort is correct.
             // return BadDirectorySeparator if errors found.
-            bool Error1 = false;
+            bool error1 = false;
             foreach (ZippedFile t in zippedFiles)
             {
                 char[] bytes = t.Name.ToCharArray();
@@ -43,9 +42,9 @@ namespace TrrntzipDN
                     fixDir = true;
                     bytes[j] = (char)47;
                     tzStatus |= TrrntZipStatus.BadDirectorySeparator;
-                    if (!Error1 && Program.VerboseLogging)
+                    if (!error1 && Program.VerboseLogging)
                     {
-                        Error1 = true;
+                        error1 = true;
                         Console.WriteLine("Incorrect directory separator found");
                     }
                 }
@@ -57,7 +56,7 @@ namespace TrrntzipDN
             // All Files in a torrentzip should be sorted with a lower case file compare.
             //
             // if needed sort the files correctly, and return Unsorted if errors found.
-            bool Error2 = false;
+            bool error2 = false;
             bool thisSortFound = true;
             while (thisSortFound)
             {
@@ -73,9 +72,9 @@ namespace TrrntzipDN
 
                         tzStatus |= TrrntZipStatus.Unsorted;
                         thisSortFound = true;
-                        if (!Error2 && Program.VerboseLogging)
+                        if (!error2 && Program.VerboseLogging)
                         {
-                            Error2 = true;
+                            error2 = true;
                             Console.WriteLine("Incorrect file order found");
                         }
 
@@ -85,7 +84,7 @@ namespace TrrntzipDN
 
 
             // ***************************** RULE 3 *************************************
-            // Directory Maker files are only needed if they are empty directories.
+            // Directory marker files are only needed if they are empty directories.
             //
             // now that the files are sorted correctly, we can see if there are unneeded
             // directory files, by first finding directory files (these end in a '\' character ascii 92)
@@ -93,7 +92,7 @@ namespace TrrntzipDN
             // If we find this 2 entry pattern (directory followed by file in that directory)
             // then the directory entry should not be present and the torrentzip is incorrect.
             // return ExtraDirectoryEnteries if error is found. 
-            bool Error3 = false;
+            bool error3 = false;
             for (int i = 0; i < zippedFiles.Count - 1; i++)
             {
                 // check if this is a directory entry
@@ -122,9 +121,9 @@ namespace TrrntzipDN
                 {
                     zippedFiles.RemoveAt(i);
                     tzStatus |= TrrntZipStatus.ExtraDirectoryEnteries;
-                    if (!Error3 && Program.VerboseLogging)
+                    if (!error3 && Program.VerboseLogging)
                     {
-                        Error3 = true;
+                        error3 = true;
                         Console.WriteLine("Un-needed directory records found");
                     }
 
@@ -134,15 +133,15 @@ namespace TrrntzipDN
 
 
             // check for repeat files
-            bool Error4 = false;
+            bool error4 = false;
             for (int i = 0; i < zippedFiles.Count - 1; i++)
             {
                 if (zippedFiles[i].Name == zippedFiles[i + 1].Name)
                 {
                     tzStatus |= TrrntZipStatus.RepeatFilesFound;
-                    if (!Error4 && Program.VerboseLogging)
+                    if (!error4 && Program.VerboseLogging)
                     {
-                        Error4 = true;
+                        error4 = true;
                         Console.WriteLine("Duplcate file enteries found");
                     }
                 }
