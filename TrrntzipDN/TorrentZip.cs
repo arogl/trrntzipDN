@@ -1,0 +1,76 @@
+﻿using System;
+using System.Collections.Generic;
+
+
+namespace TrrntzipDN
+{
+    class TorrentZip
+    {
+        private readonly byte[] _buffer;
+
+        public TorrentZip()
+        {
+            _buffer = new byte[1024 * 1024];
+        }
+
+        public bool Process(IO.FileInfo fi)
+        {
+            ZipFile zipFile;
+            TrrntZipStatus tzs = OpenZip(fi, out zipFile);
+            if ((tzs & TrrntZipStatus.CorruptZip) == TrrntZipStatus.CorruptZip)
+            {
+                Console.WriteLine("Zip file is corrupt");
+                return false;
+            }
+            
+            List<ZippedFile> zippedFiles=ReadZipContent(zipFile);
+
+            tzs |= TorrentZipCheck.CheckZipFiles(ref zippedFiles);
+
+            if (tzs == TrrntZipStatus.ValidTrrntzip && !Program.ForceReZip || Program.CheckOnly)
+                return true;
+
+            if (tzs!=TrrntZipStatus.NotTrrntzipped && tzs!=TrrntZipStatus.ValidTrrntzip)
+                Console.WriteLine("Original torrentzip file was invalid");
+
+            Console.WriteLine("TorrentZipping file "+fi.FullName);
+            TrrntZipStatus fixedTzs = TorrentZipRebuild.ReZipFiles(zippedFiles, zipFile, _buffer);
+            return fixedTzs == TrrntZipStatus.ValidTrrntzip;
+        }
+
+
+        private TrrntZipStatus OpenZip(IO.FileInfo fi,out ZipFile zipFile)
+        {
+            zipFile = new ZipFile();
+            ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, false);
+            if (zr != ZipReturn.ZipGood)
+                return TrrntZipStatus.CorruptZip;
+
+            TrrntZipStatus tzStatus = TrrntZipStatus.Unknown;
+
+            // first check if the file is a trrntip files
+            if (zipFile.ZipStatus != ZipStatus.TrrntZip)
+                tzStatus |= TrrntZipStatus.NotTrrntzipped;
+
+            return tzStatus;
+        }
+
+        private List<ZippedFile> ReadZipContent(ZipFile zipFile)
+        {
+            List<ZippedFile> zippedFiles = new List<ZippedFile>();
+            for (int i = 0; i < zipFile.LocalFilesCount(); i++)
+            {
+                zippedFiles.Add(
+                    new ZippedFile
+                    {
+                        Index = i,
+                        Name = zipFile.Filename(i),
+                        ByteCRC = zipFile.CRC32(i),
+                        Size = zipFile.UncompressedSize(i)
+                    }
+                );
+            }
+            return zippedFiles;
+        }
+    }
+}
