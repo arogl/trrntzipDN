@@ -15,6 +15,11 @@ namespace TrrntzipDN
 
         public bool Process(IO.FileInfo fi)
         {
+
+            if (Program.VerboseLogging)
+                Console.WriteLine();
+
+            Console.Write(fi.Name + " - ");
             ZipFile zipFile;
             TrrntZipStatus tzs = OpenZip(fi, out zipFile);
             if ((tzs & TrrntZipStatus.CorruptZip) == TrrntZipStatus.CorruptZip)
@@ -22,24 +27,27 @@ namespace TrrntzipDN
                 Console.WriteLine("Zip file is corrupt");
                 return false;
             }
-            
-            List<ZippedFile> zippedFiles=ReadZipContent(zipFile);
+
+            List<ZippedFile> zippedFiles = ReadZipContent(zipFile);
 
             tzs |= TorrentZipCheck.CheckZipFiles(ref zippedFiles);
 
             if (tzs == TrrntZipStatus.ValidTrrntzip && !Program.ForceReZip || Program.CheckOnly)
+            {
+                Console.WriteLine("Skipping File");
                 return true;
-
-            if (tzs!=TrrntZipStatus.NotTrrntzipped && tzs!=TrrntZipStatus.ValidTrrntzip)
+            }
+            if (tzs != TrrntZipStatus.NotTrrntzipped && tzs != TrrntZipStatus.ValidTrrntzip)
                 Console.WriteLine("Original torrentzip file was invalid");
 
-            Console.WriteLine("TorrentZipping file "+fi.FullName);
+         
+            Console.WriteLine("TorrentZipping");
             TrrntZipStatus fixedTzs = TorrentZipRebuild.ReZipFiles(zippedFiles, zipFile, _buffer);
             return fixedTzs == TrrntZipStatus.ValidTrrntzip;
         }
 
 
-        private TrrntZipStatus OpenZip(IO.FileInfo fi,out ZipFile zipFile)
+        private TrrntZipStatus OpenZip(IO.FileInfo fi, out ZipFile zipFile)
         {
             zipFile = new ZipFile();
             ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, false);

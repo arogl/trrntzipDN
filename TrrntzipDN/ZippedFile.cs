@@ -1,4 +1,6 @@
-﻿namespace TrrntzipDN
+﻿using System;
+
+namespace TrrntzipDN
 {
     public class ZippedFile
     {
@@ -26,5 +28,7 @@
                     ((uint)value[0] << 24);
             }
         }
+
+        public string StringCRC => BitConverter.ToString(ByteCRC).ToLower().Replace("-", "");
     }
 }

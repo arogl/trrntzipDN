@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using Ionic.Crc;
 
@@ -24,6 +25,12 @@ namespace TrrntzipDN
             for (int i = 0; i < zippedFiles.Count; i++)
             {
                 ZippedFile t = zippedFiles[i];
+
+                if (Program.VerboseLogging)
+                {
+                    Console.WriteLine("{0,15}  {1}   {2}", t.Size, t.StringCRC, t.Name);
+                }
+
 
                 Stream readStream;
                 ulong streamSize;

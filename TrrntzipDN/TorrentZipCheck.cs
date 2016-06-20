@@ -25,6 +25,7 @@ namespace TrrntzipDN
         {
             TrrntZipStatus tzStatus=TrrntZipStatus.Unknown;
 
+
             // ***************************** RULE 1 *************************************
             // Directory separator should be a '/' a '\' is invalid and should be replaced with '/'
             //

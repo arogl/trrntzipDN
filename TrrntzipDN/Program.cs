@@ -86,14 +86,21 @@ namespace TrrntzipDN
                 }
             }
 
-            List<FileInfo> lstFi = new List<FileInfo>();
-
+            TorrentZip tz = new TorrentZip();
             for (int i = 0; i < args.Length; i++)
             {
                 string arg = args[i];
                 if (arg.Length < 2) continue;
                 if (arg.Substring(0, 1) == "-") continue;
-                
+
+                // first check if arg is a directory
+                if (Directory.Exists(arg))
+                {
+                    ProcessDir(arg);
+                    continue;
+                }
+
+                // now check if arg is a directory/filename with possible wild cards.
                 string dir = Path.GetDirectoryName(arg);
                 if (string.IsNullOrEmpty(dir)) dir = Environment.CurrentDirectory;
 
@@ -108,14 +115,17 @@ namespace TrrntzipDN
                 {
                     string ext = Path.GetExtension(file.FullName);
                     if (!string.IsNullOrEmpty(ext) && ext.ToLower() == ".zip")
-                        lstFi.Add(file);
+                    {
+                        tz.Process(new IO.FileInfo(file.FullName));
+                    }
                 }
-
-                if (Directory.Exists(arg))
-                    ProcessDir(arg);
             }
 
-            if (_guiLaunch) Console.ReadLine();
+            if (_guiLaunch)
+            {
+                Console.WriteLine("Complete.");
+                Console.ReadLine();
+            }
         }
 
 
@@ -133,7 +143,6 @@ namespace TrrntzipDN
                 string extention = Path.GetExtension(filename);
                 if (!string.IsNullOrEmpty(extention) && extention.ToLower() == ".zip")
                 {
-                    Console.WriteLine("Checking File : "+filename);
                     tz.Process(new IO.FileInfo(filename));
                 }
             }
