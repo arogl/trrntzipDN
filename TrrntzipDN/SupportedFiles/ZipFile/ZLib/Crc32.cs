@@ -27,10 +27,11 @@
 
 
 using System;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Interop = System.Runtime.InteropServices;
 
-namespace Ionic.Crc
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
     /// <summary>
     ///   Computes a CRC-32. The CRC-32 algorithm is parameterized - you
@@ -43,7 +44,7 @@ namespace Ionic.Crc
     ///   archive files.
     /// </remarks>
 
-    [Interop.GuidAttribute("ebc25cf6-9120-4283-b972-0e5520d0000C")]
+    [Guid("ebc25cf6-9120-4283-b972-0e5520d0000C")]
     [Interop.ComVisible(true)]
 #if !NETCF
     [Interop.ClassInterface(Interop.ClassInterfaceType.AutoDispatch)]

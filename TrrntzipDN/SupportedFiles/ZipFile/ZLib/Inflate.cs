@@ -63,7 +63,8 @@
 
 
 using System;
-namespace Ionic.Zlib
+
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
     sealed class InflateBlocks
     {

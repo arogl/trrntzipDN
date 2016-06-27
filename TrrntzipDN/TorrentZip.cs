@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using TrrntzipDN.SupportedFiles;
+using TrrntzipDN.SupportedFiles.ZipFile;
 
 
 namespace TrrntzipDN
@@ -20,7 +22,7 @@ namespace TrrntzipDN
                 Console.WriteLine();
 
             Console.Write(fi.Name + " - ");
-            ZipFile zipFile;
+            ICompress zipFile;
             TrrntZipStatus tzs = OpenZip(fi, out zipFile);
             if ((tzs & TrrntZipStatus.CorruptZip) == TrrntZipStatus.CorruptZip)
             {
@@ -47,10 +49,10 @@ namespace TrrntzipDN
         }
 
 
-        private TrrntZipStatus OpenZip(IO.FileInfo fi, out ZipFile zipFile)
+        private TrrntZipStatus OpenZip(IO.FileInfo fi, out ICompress zipFile)
         {
             zipFile = new ZipFile();
-            ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, false);
+            ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, true);
             if (zr != ZipReturn.ZipGood)
                 return TrrntZipStatus.CorruptZip;
 
@@ -63,7 +65,7 @@ namespace TrrntzipDN
             return tzStatus;
         }
 
-        private List<ZippedFile> ReadZipContent(ZipFile zipFile)
+        private List<ZippedFile> ReadZipContent(ICompress zipFile)
         {
             List<ZippedFile> zippedFiles = new List<ZippedFile>();
             for (int i = 0; i < zipFile.LocalFilesCount(); i++)

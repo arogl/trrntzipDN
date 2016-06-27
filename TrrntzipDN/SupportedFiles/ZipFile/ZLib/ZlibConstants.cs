@@ -61,9 +61,7 @@
 // -----------------------------------------------------------------------
 
 
-using System;
-
-namespace Ionic.Zlib
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
     /// <summary>
     /// A bunch of constants used in the Zlib interface.

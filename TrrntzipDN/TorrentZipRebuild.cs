@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using Ionic.Crc;
+using TrrntzipDN.SupportedFiles;
+using TrrntzipDN.SupportedFiles.ZipFile;
+using TrrntzipDN.SupportedFiles.ZipFile.ZLib;
 
 namespace TrrntzipDN
 {
     public static class TorrentZipRebuild
     {
-        public static TrrntZipStatus ReZipFiles(List<ZippedFile> zippedFiles, ZipFile originalZipFile, byte[] buffer)
+        public static TrrntZipStatus ReZipFiles(List<ZippedFile> zippedFiles, ICompress originalZipFile, byte[] buffer)
         {
             int bufferSize = buffer.Length;
 
@@ -32,10 +34,14 @@ namespace TrrntzipDN
                 }
 
 
-                Stream readStream;
-                ulong streamSize;
+                Stream readStream=null;
+                ulong streamSize=0;
                 ushort compMethod;
-                ZipReturn zrInput = originalZipFile.ZipFileOpenReadStream(t.Index, false, out readStream, out streamSize, out compMethod);
+
+                ZipFile z = originalZipFile as ZipFile;
+                ZipReturn zrInput=ZipReturn.ZipUntested;
+                if (z != null)
+                    zrInput = z.ZipFileOpenReadStream(t.Index, false, out readStream, out streamSize, out compMethod);
 
                 Stream writeStream;
                 ZipReturn zrOutput = zipFileOut.ZipFileOpenWriteStream(false, true, t.Name, streamSize, 8, out writeStream);

@@ -65,9 +65,10 @@
 
 
 using System;
+using System.Runtime.InteropServices;
 using Interop=System.Runtime.InteropServices;
 
-namespace Ionic.Zlib
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
     /// <summary>
     /// Encoder and Decoder for ZLIB and DEFLATE (IETF RFC1950 and RFC1951).
@@ -79,7 +80,7 @@ namespace Ionic.Zlib
     /// href="http://www.ietf.org/rfc/rfc1950.txt">RFC 1950 - ZLIB</see> and <see
     /// href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951 - DEFLATE</see>.
     /// </remarks>
-    [Interop.GuidAttribute("ebc25cf6-9120-4283-b972-0e5520d0000D")]
+    [Guid("ebc25cf6-9120-4283-b972-0e5520d0000D")]
     [Interop.ComVisible(true)]
 #if !NETCF    
     [Interop.ClassInterface(Interop.ClassInterfaceType.AutoDispatch)]

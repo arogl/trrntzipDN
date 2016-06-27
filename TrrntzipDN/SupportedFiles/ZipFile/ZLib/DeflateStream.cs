@@ -27,7 +27,7 @@
 
 using System;
 
-namespace Ionic.Zlib
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
     /// <summary>
     /// A class for compressing and decompressing streams using the Deflate algorithm.
@@ -520,9 +520,9 @@ namespace Ionic.Zlib
         {
             get
             {
-                if (this._baseStream._streamMode == Ionic.Zlib.ZlibBaseStream.StreamMode.Writer)
+                if (this._baseStream._streamMode == ZlibBaseStream.StreamMode.Writer)
                     return this._baseStream._z.TotalBytesOut;
-                if (this._baseStream._streamMode == Ionic.Zlib.ZlibBaseStream.StreamMode.Reader)
+                if (this._baseStream._streamMode == ZlibBaseStream.StreamMode.Reader)
                     return this._baseStream._z.TotalBytesIn;
                 return 0;
             }

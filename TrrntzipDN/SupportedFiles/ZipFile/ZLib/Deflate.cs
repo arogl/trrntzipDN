@@ -69,7 +69,7 @@
 
 using System;
 
-namespace Ionic.Zlib
+namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
 {
 
     internal enum BlockState

@@ -1,64 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
-using Ionic.Crc;
-using Ionic.Zlib;
-
+using RomVaultX.SupportedFiles.Files;
+using TrrntzipDN.SupportedFiles.ZipFile.ZLib;
 
 // UInt16 = ushort
 // UInt32 = uint
 // ULong = ulong
 
-namespace TrrntzipDN
+namespace TrrntzipDN.SupportedFiles.ZipFile
 {
 
-    public enum ZipReturn
+    public class ZipFile : ICompress
     {
-        ZipGood,
-        ZipFileCountError,
-        ZipSignatureError,
-        ZipExtraDataOnEndOfZip,
-        ZipUnsupportedCompression,
-        ZipLocalFileHeaderError,
-        ZipCenteralDirError,
-        ZipEndOfCentralDirectoryError,
-        Zip64EndOfCentralDirError,
-        Zip64EndOfCentralDirectoryLocatorError,
-        ZipReadingFromOutputFile,
-        ZipWritingToInputFile,
-        ZipErrorGettingDataStream,
-        ZipCRCDecodeError,
-        ZipDecodeError,
-        ZipFileNameToLong,
-        ZipFileAlreadyOpen,
-        ZipErrorOpeningFile,
-        ZipErrorFileNotFound,
-        ZipErrorReadingFile,
-        ZipErrorTimeStamp,
-        ZipErrorRollBackFile
+        const int Buffersize = 4096 * 1024;
+        private static byte[] _buffer0;
+        private static byte[] _buffer1;
 
-    }
-
-    public enum ZipOpenType
-    {
-        Closed,
-        OpenRead,
-        OpenWrite
-    }
-
-    [Flags]
-    public enum ZipStatus
-    {
-        None = 0x0,
-        TrrntZip = 0x1,
-        ExtraData = 0x2
-    }
-
-
-    public class ZipFile
-    {
         private const uint LocalFileHeaderSignature = 0x04034b50;
         private const uint CentralDirectoryHeaderSigniature = 0x02014b50;
         private const uint EndOfCentralDirSignature = 0x06054b50;
@@ -69,7 +28,7 @@ namespace TrrntzipDN
         {
             private readonly Stream _zipFs;
             public string FileName { get; private set; }
-            private ushort _generalPurposeBitFlag;
+            public ushort _generalPurposeBitFlag { get; private set; }
             private ushort _compressionMethod;
             private ushort _lastModFileTime;
             private ushort _lastModFileDate;
@@ -85,6 +44,10 @@ namespace TrrntzipDN
             public bool Zip64 { get; private set; }
             public bool TrrntZip { get; private set; }
 
+            public byte[] sha1 { get; private set; }
+            public byte[] md5 { get; private set; }
+
+            public ZipReturn FileStatus = ZipReturn.ZipUntested;
             public LocalFile(Stream zipFs)
             {
                 _zipFs = zipFs;
@@ -296,6 +259,8 @@ namespace TrrntzipDN
             {
                 try
                 {
+                    TrrntZip = true;
+
                     BinaryReader br = new BinaryReader(_zipFs);
 
                     _zipFs.Position = (long)RelativeOffsetOfLocalHeader;
@@ -304,10 +269,10 @@ namespace TrrntzipDN
                         return ZipReturn.ZipLocalFileHeaderError;
 
                     br.ReadUInt16();  // version needed to extract
-                    ushort tshort = br.ReadUInt16();
-                    if (tshort != _generalPurposeBitFlag) return ZipReturn.ZipLocalFileHeaderError;
+                    ushort generalPurposeBitFlagLocal = br.ReadUInt16();
+                    if (generalPurposeBitFlagLocal != _generalPurposeBitFlag) TrrntZip = false;
 
-                    tshort = br.ReadUInt16();
+                    ushort tshort = br.ReadUInt16();
                     if (tshort != _compressionMethod) return ZipReturn.ZipLocalFileHeaderError;
 
                     tshort = br.ReadUInt16();
@@ -320,7 +285,7 @@ namespace TrrntzipDN
                     if (((_generalPurposeBitFlag & 8) == 0) && !ByteArrCompare(tCRC, CRC)) return ZipReturn.ZipLocalFileHeaderError;
 
                     uint tCompressedSize = br.ReadUInt32();
-                    if (Zip64 && tCompressedSize != 0xffffffff)   // if Zip64 File then the compressedSize should be 0xffffffff
+                    if (Zip64 && tCompressedSize != 0xffffffff && tCompressedSize != _compressedSize)   // if Zip64 File then the compressedSize should be 0xffffffff
                         return ZipReturn.ZipLocalFileHeaderError;
                     if ((_generalPurposeBitFlag & 8) == 8 && tCompressedSize != 0)   // if bit 4 set then no compressedSize is set yet
                         return ZipReturn.ZipLocalFileHeaderError;
@@ -330,7 +295,7 @@ namespace TrrntzipDN
 
 
                     uint tUnCompressedSize = br.ReadUInt32();
-                    if (Zip64 && tUnCompressedSize != 0xffffffff)   // if Zip64 File then the unCompressedSize should be 0xffffffff
+                    if (Zip64 && tUnCompressedSize != 0xffffffff && tUnCompressedSize != UncompressedSize)   // if Zip64 File then the unCompressedSize should be 0xffffffff
                         return ZipReturn.ZipLocalFileHeaderError;
                     if ((_generalPurposeBitFlag & 8) == 8 && tUnCompressedSize != 0)   // if bit 4 set then no unCompressedSize is set yet
                         return ZipReturn.ZipLocalFileHeaderError;
@@ -342,7 +307,7 @@ namespace TrrntzipDN
 
 
                     byte[] bFileName = br.ReadBytes(fileNameLength);
-                    string tFileName = (_generalPurposeBitFlag & (1 << 11)) == 0 ?
+                    string tFileName = (generalPurposeBitFlagLocal & (1 << 11)) == 0 ?
                         GetString(bFileName) :
                         Encoding.UTF8.GetString(bFileName, 0, fileNameLength);
 
@@ -427,6 +392,103 @@ namespace TrrntzipDN
 
 
             }
+            public ZipReturn LocalFileHeaderReadQuick()
+            {
+                try
+                {
+                    TrrntZip = true;
+
+                    BinaryReader br = new BinaryReader(_zipFs);
+
+                    _zipFs.Position = (long)RelativeOffsetOfLocalHeader;
+                    uint thisSignature = br.ReadUInt32();
+                    if (thisSignature != LocalFileHeaderSignature)
+                        return ZipReturn.ZipLocalFileHeaderError;
+
+                    br.ReadUInt16();  // version needed to extract
+                    _generalPurposeBitFlag = br.ReadUInt16();
+                    if ((_generalPurposeBitFlag & 8) == 8)
+                        return ZipReturn.ZipCannotFastOpen;
+
+                    _compressionMethod = br.ReadUInt16();
+                    _lastModFileTime = br.ReadUInt16();
+                    _lastModFileDate = br.ReadUInt16();
+                    CRC = ReadCRC(br);
+                    _compressedSize = br.ReadUInt32();
+                    UncompressedSize = br.ReadUInt32();
+
+                    ushort fileNameLength = br.ReadUInt16();
+                    ushort extraFieldLength = br.ReadUInt16();
+
+                    byte[] bFileName = br.ReadBytes(fileNameLength);
+
+                    FileName = (_generalPurposeBitFlag & (1 << 11)) == 0 ?
+                        GetString(bFileName) :
+                        Encoding.UTF8.GetString(bFileName, 0, fileNameLength);
+
+                    byte[] extraField = br.ReadBytes(extraFieldLength);
+
+                    Zip64 = false;
+                    int pos = 0;
+                    while (extraFieldLength > pos)
+                    {
+                        ushort type = BitConverter.ToUInt16(extraField, pos);
+                        pos += 2;
+                        ushort blockLength = BitConverter.ToUInt16(extraField, pos);
+                        pos += 2;
+                        switch (type)
+                        {
+                            case 0x0001:
+                                Zip64 = true;
+                                if (UncompressedSize == 0xffffffff)
+                                {
+                                    UncompressedSize = BitConverter.ToUInt64(extraField, pos);
+                                    pos += 8;
+                                }
+                                if (_compressedSize == 0xffffffff)
+                                {
+                                    _compressedSize = BitConverter.ToUInt64(extraField, pos);
+                                    pos += 8;
+                                }
+                                break;
+                            case 0x7075:
+                                pos += 1;
+                                uint nameCRC32 = BitConverter.ToUInt32(extraField, pos);
+                                pos += 4;
+
+                                CRC32 crcTest = new CRC32();
+                                crcTest.SlurpBlock(bFileName, 0, fileNameLength);
+                                uint fCRC = crcTest.Crc32ResultU;
+
+                                if (nameCRC32 != fCRC) return ZipReturn.ZipLocalFileHeaderError;
+
+                                int charLen = blockLength - 5;
+
+                                FileName = Encoding.UTF8.GetString(extraField, pos, charLen);
+
+                                pos += charLen;
+
+                                break;
+                            default:
+                                pos += blockLength;
+                                break;
+                        }
+                    }
+
+                    _dataLocation = (ulong)_zipFs.Position;
+                    return ZipReturn.ZipGood;
+
+                }
+                catch
+                {
+                    return ZipReturn.ZipLocalFileHeaderError;
+                }
+
+
+            }
+
+
+
             private void LocalFileHeaderWrite()
             {
                 BinaryWriter bw = new BinaryWriter(_zipFs);
@@ -621,10 +683,9 @@ namespace TrrntzipDN
             }
 
 
-            public ZipReturn LocalFileCheck(out byte[] bMD5, out byte[] bSHA1)
+            public void LocalFileCheck()
             {
-                bMD5 = null;
-                bSHA1 = null;
+                if (FileStatus != ZipReturn.ZipUntested) return;
 
                 try
                 {
@@ -642,35 +703,84 @@ namespace TrrntzipDN
                     }
 
                     if (sInput == null)
-                        return ZipReturn.ZipErrorGettingDataStream;
-
-                    CRC32Hash crc32 = new CRC32Hash();
-                    MD5 md5 = MD5.Create();
-                    SHA1 sha1 = SHA1.Create();
-
-                    ulong sizetogo = UncompressedSize;
-                    const int buffersize = 4096 * 128;
-                    byte[] buffer = new byte[buffersize];
-
-                    while (sizetogo > 0)
                     {
-                        int sizenow = sizetogo > buffersize ? buffersize : (int)sizetogo;
-                        sInput.Read(buffer, 0, sizenow);
-
-                        crc32.TransformBlock(buffer, 0, sizenow, null, 0);
-                        md5.TransformBlock(buffer, 0, sizenow, null, 0);
-                        sha1.TransformBlock(buffer, 0, sizenow, null, 0);
-
-                        sizetogo = sizetogo - (ulong)sizenow;
+                        FileStatus = ZipReturn.ZipErrorGettingDataStream;
+                        return;
                     }
 
-                    crc32.TransformFinalBlock(buffer, 0, 0);
-                    md5.TransformFinalBlock(buffer, 0, 0);
-                    sha1.TransformFinalBlock(buffer, 0, 0);
 
-                    byte[] testcrc = crc32.Hash;
-                    bMD5 = md5.Hash;
-                    bSHA1 = sha1.Hash;
+                    if (_buffer0 == null)
+                    {
+                        _buffer0 = new byte[Buffersize];
+                        _buffer1 = new byte[Buffersize];
+                    }
+
+                    ulong sizetogo = UncompressedSize;
+
+                    ThreadLoadBuffer lbuffer = new ThreadLoadBuffer(sInput);
+                    ThreadCRC tcrc32 = new ThreadCRC();
+                    ThreadMD5 tmd5 = new ThreadMD5();
+                    ThreadSHA1 tsha1 = new ThreadSHA1();
+
+                    // Pre load the first buffer0
+                    int sizeNext = sizetogo > Buffersize ? Buffersize : (int)sizetogo;
+                    sInput.Read(_buffer0, 0, sizeNext);
+                    int sizebuffer = sizeNext;
+                    sizetogo -= (ulong)sizeNext;
+                    bool whichBuffer = true;
+
+                    while (sizebuffer > 0 && !lbuffer.errorState)
+                    {
+                        sizeNext = sizetogo > Buffersize ? Buffersize : (int)sizetogo;
+
+                        if (sizeNext > 0)
+                            lbuffer.Trigger(whichBuffer ? _buffer1 : _buffer0, sizeNext);
+
+                        byte[] buffer = whichBuffer ? _buffer0 : _buffer1;
+                        tcrc32.Trigger(buffer, sizebuffer);
+                        tmd5.Trigger(buffer, sizebuffer);
+                        tsha1.Trigger(buffer, sizebuffer);
+
+                        if (sizeNext > 0)
+                            lbuffer.Wait();
+                        tcrc32.Wait();
+                        tmd5.Wait();
+                        tsha1.Wait();
+
+                        sizebuffer = sizeNext;
+                        sizetogo -= (ulong)sizeNext;
+                        whichBuffer = !whichBuffer;
+                    }
+
+                    if (lbuffer.errorState)
+                    {
+                        if (_compressionMethod == 8)
+                        {
+                            sInput.Close();
+                            sInput.Dispose();
+                        }
+
+                        lbuffer.Dispose();
+                        tcrc32.Dispose();
+                        tmd5.Dispose();
+                        tsha1.Dispose();
+                        FileStatus = ZipReturn.ZipDecodeError;
+                        return;
+                    }
+
+                    lbuffer.Finish();
+                    tcrc32.Finish();
+                    tmd5.Finish();
+                    tsha1.Finish();
+
+                    byte[] testcrc = tcrc32.Hash;
+                    md5 = tmd5.Hash;
+                    sha1 = tsha1.Hash;
+
+                    lbuffer.Dispose();
+                    tcrc32.Dispose();
+                    tmd5.Dispose();
+                    tsha1.Dispose();
 
                     if (_compressionMethod == 8)
                     {
@@ -678,11 +788,11 @@ namespace TrrntzipDN
                         sInput.Dispose();
                     }
 
-                    return ByteArrCompare(CRC, testcrc) ? ZipReturn.ZipGood : ZipReturn.ZipCRCDecodeError;
+                    FileStatus = ByteArrCompare(CRC, testcrc) ? ZipReturn.ZipGood : ZipReturn.ZipCRCDecodeError;
                 }
                 catch
                 {
-                    return ZipReturn.ZipDecodeError;
+                    FileStatus = ZipReturn.ZipDecodeError;
                 }
             }
 
@@ -699,6 +809,7 @@ namespace TrrntzipDN
             public ulong LocalFilePos
             {
                 get { return RelativeOffsetOfLocalHeader; }
+                set { RelativeOffsetOfLocalHeader = value; }
             }
             private static byte[] ReadCRC(BinaryReader br)
             {
@@ -737,7 +848,8 @@ namespace TrrntzipDN
 
         private ZipStatus _pZipStatus;
         private bool _zip64;
-        public ZipOpenType ZipOpen;
+        public ZipOpenType ZipOpen { get; private set; }
+
 
         public ZipStatus ZipStatus { get { return _pZipStatus; } }
 
@@ -745,8 +857,15 @@ namespace TrrntzipDN
 
         public string Filename(int i) { return _localFiles[i].FileName; }
         public ulong UncompressedSize(int i) { return _localFiles[i].UncompressedSize; }
-        public ulong LocalHeader(int i) { return _localFiles[i].RelativeOffsetOfLocalHeader; }
+        public ulong? LocalHeader(int i)
+        {
+            return ((_localFiles[i]._generalPurposeBitFlag & 8) == 0) ? (ulong?)_localFiles[i].RelativeOffsetOfLocalHeader : null;
+        }
+        public ZipReturn FileStatus(int i) { return _localFiles[i].FileStatus; }
         public byte[] CRC32(int i) { return _localFiles[i].CRC; }
+        public byte[] MD5(int i) { return _localFiles[i].md5; }
+        public byte[] SHA1(int i) { return _localFiles[i].sha1; }
+
 
         ~ZipFile()
         {
@@ -783,7 +902,7 @@ namespace TrrntzipDN
                 _zipFs.Read(buffer, 0, (int)readSize);
 
 
-                for (int i = 0; i < readSize - 3; i++)
+                for (long i = readSize - 4; i >= 0; i--)
                 {
                     if ((buffer[i] != 0x50) || (buffer[i + 1] != 0x4b) || (buffer[i + 2] != 0x05) || (buffer[i + 3] != 0x06)) continue;
 
@@ -920,7 +1039,7 @@ namespace TrrntzipDN
 
 
 
-        public ZipReturn ZipFileOpen(string newFilename, long timestamp, bool readLocalHeaders)
+        public ZipReturn ZipFileOpen(string newFilename, long timestamp, bool readHeaders)
         {
             ZipFileClose();
             _pZipStatus = ZipStatus.None;
@@ -946,6 +1065,8 @@ namespace TrrntzipDN
                 if (errorCode != 0)
                 {
                     ZipFileClose();
+                    if (errorCode == 32)
+                        return ZipReturn.ZipFileLocked;
                     return ZipReturn.ZipErrorOpeningFile;
                 }
             }
@@ -961,6 +1082,8 @@ namespace TrrntzipDN
             }
             ZipOpen = ZipOpenType.OpenRead;
 
+            if (!readHeaders)
+                return ZipReturn.ZipGood;
 
 
             try
@@ -1000,6 +1123,8 @@ namespace TrrntzipDN
                     }
                 }
 
+                bool trrntzip = false;
+
                 // check if the ZIP has a valid TorrentZip file comment
                 if (_fileComment.Length == 22)
                 {
@@ -1018,9 +1143,8 @@ namespace TrrntzipDN
                         string tcrc = GetString(_fileComment).Substring(14, 8);
                         string zcrc = r.ToString("X8");
                         if (String.Compare(tcrc, zcrc, StringComparison.Ordinal) == 0)
-                        {
-                            _pZipStatus |= ZipStatus.TrrntZip;
-                        }
+                            trrntzip = true;
+
                     }
                 }
 
@@ -1043,18 +1167,46 @@ namespace TrrntzipDN
                     _localFiles.Add(lc);
                 }
 
-                if (readLocalHeaders)
+                for (int i = 0; i < _localFilesCount; i++)
                 {
-                    for (int i = 0; i < _localFilesCount; i++)
+                    zRet = _localFiles[i].LocalFileHeaderRead();
+                    if (zRet != ZipReturn.ZipGood)
                     {
-                        zRet = _localFiles[i].LocalFileHeaderRead();
-                        if (zRet != ZipReturn.ZipGood)
-                        {
-                            ZipFileClose();
-                            return zRet;
-                        }
+                        ZipFileClose();
+                        return zRet;
                     }
+                    trrntzip &= _localFiles[i].TrrntZip;
                 }
+
+                // check trrntzip file order
+                if (trrntzip)
+                    for (int i = 0; i < _localFilesCount - 1; i++)
+                    {
+                        if (TrrntZipStringCompare(_localFiles[i].FileName, _localFiles[i + 1].FileName) < 0) continue;
+                        trrntzip = false;
+                        break;
+                    }
+
+                // check trrntzip directories
+                if (trrntzip)
+                    for (int i = 0; i < _localFilesCount - 1; i++)
+                    {
+                        // see if we found a directory
+                        string filename0 = _localFiles[i].FileName;
+                        if (filename0.Substring(filename0.Length - 1, 1) != "/") continue;
+
+                        // see if the next file is in that directory
+                        string filename1 = _localFiles[i + 1].FileName;
+                        if (filename1.Length <= filename0.Length) continue;
+                        if (TrrntZipStringCompare(filename0, filename1.Substring(0, filename0.Length)) != 0) continue;
+
+                        // if we found a file in the directory then we do not need the directory entry
+                        trrntzip = false;
+                        break;
+                    }
+
+                if (trrntzip)
+                    _pZipStatus |= ZipStatus.TrrntZip;
 
                 return ZipReturn.ZipGood;
             }
@@ -1130,6 +1282,7 @@ namespace TrrntzipDN
 
             if (_zip64)
             {
+                _endOfCenterDir64 = (ulong)_zipFs.Position;
                 Zip64EndOfCentralDirWrite();
                 Zip64EndOfCentralDirectoryLocatorWrite();
             }
@@ -1190,6 +1343,25 @@ namespace TrrntzipDN
 
             return _localFiles[index].LocalFileOpenReadStream(raw, out stream, out streamSize, out compressionMethod);
         }
+
+        public ZipReturn ZipFileOpenReadStreamQuick(ulong pos, bool raw, out Stream stream, out ulong streamSize, out ushort compressionMethod)
+        {
+            LocalFile tmpFile = new LocalFile(_zipFs) { LocalFilePos = pos };
+            _localFiles.Clear();
+            _localFiles.Add(tmpFile);
+            ZipReturn zr = tmpFile.LocalFileHeaderReadQuick();
+            if (zr != ZipReturn.ZipGood)
+            {
+                stream = null;
+                streamSize = 0;
+                compressionMethod = 0;
+                return zr;
+            }
+            _readIndex = 0;
+
+            return tmpFile.LocalFileOpenReadStream(raw, out stream, out streamSize, out compressionMethod);
+        }
+
         public ZipReturn ZipFileCloseReadStream()
         {
             return _localFiles[_readIndex].LocalFileCloseReadStream();
@@ -1236,24 +1408,31 @@ namespace TrrntzipDN
         }
 
 
-
-        public ZipReturn ZipFileCheck(int n, out byte[] txtmd5, out byte[] txtsha1)
+        /*
+        public void BreakTrrntZip(string filename)
         {
-            txtmd5 = null;
-            txtsha1 = null;
-            if (ZipOpen != ZipOpenType.OpenRead)
-                return ZipReturn.ZipReadingFromOutputFile;
-
-            ZipReturn zRet = _localFiles[n].LocalFileHeaderRead();
-            if (zRet != ZipReturn.ZipGood)
+            _zipFs = new FileStream(filename, FileMode.Open, FileAccess.ReadWrite);
+            BinaryReader zipBr = new BinaryReader(_zipFs);
+            _zipFs.Position = _zipFs.Length - 22;
+            byte[] fileComment = zipBr.ReadBytes(22);
+            if (GetString(fileComment).Substring(0, 14) == "TORRENTZIPPED-")
             {
-                ZipFileClose();
-                return zRet;
+                _zipFs.Position = _zipFs.Length - 8;
+                _zipFs.WriteByte(48); _zipFs.WriteByte(48); _zipFs.WriteByte(48); _zipFs.WriteByte(48);
+                _zipFs.WriteByte(48); _zipFs.WriteByte(48); _zipFs.WriteByte(48); _zipFs.WriteByte(48);
             }
 
-            return _localFiles[n].LocalFileCheck(out txtmd5, out txtsha1);
+            zipBr.Close();
+            _zipFs.Flush();
+            _zipFs.Close();
         }
+        */
 
+        public void DeepScan()
+        {
+            foreach (LocalFile lfile in _localFiles)
+                lfile.LocalFileCheck();
+        }
 
         private static void CreateDirForFile(string sFilename)
         {
@@ -1277,7 +1456,6 @@ namespace TrrntzipDN
                 IO.Directory.CreateDirectory(strTemp);
             }
         }
-
 
 
         public static string ZipErrorMessageText(ZipReturn zS)
@@ -1381,7 +1559,33 @@ namespace TrrntzipDN
             return true;
         }
 
+        private static int TrrntZipStringCompare(string string1, string string2)
+        {
+            char[] bytes1 = string1.ToCharArray();
+            char[] bytes2 = string2.ToCharArray();
 
+            int pos1 = 0;
+            int pos2 = 0;
+
+            for (;;)
+            {
+                if (pos1 == bytes1.Length)
+                    return ((pos2 == bytes2.Length) ? 0 : -1);
+                if (pos2 == bytes2.Length)
+                    return 1;
+
+                int byte1 = bytes1[pos1++];
+                int byte2 = bytes2[pos2++];
+
+                if (byte1 >= 65 && byte1 <= 90) byte1 += 0x20;
+                if (byte2 >= 65 && byte2 <= 90) byte2 += 0x20;
+
+                if (byte1 < byte2)
+                    return -1;
+                if (byte1 > byte2)
+                    return 1;
+            }
+        }
     }
 
 }
