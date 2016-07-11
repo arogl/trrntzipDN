@@ -144,7 +144,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
                 throw new NotImplementedException();
 
             const int bufferSize = 10240;
-            Byte[] seekBuffer = new byte[bufferSize];
+            byte[] seekBuffer = new byte[bufferSize];
             long seekToGo = offset;
             while (seekToGo > 0)
             {

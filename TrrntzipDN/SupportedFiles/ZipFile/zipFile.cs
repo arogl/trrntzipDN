@@ -841,7 +841,7 @@ namespace TrrntzipDN.SupportedFiles.ZipFile
         private ulong _endOfCenterDir64;
 
         byte[] _fileComment;
-        private Stream _zipFs;
+        private FileStream _zipFs;
 
         private uint _localFilesCount;
         private readonly List<LocalFile> _localFiles = new List<LocalFile>();

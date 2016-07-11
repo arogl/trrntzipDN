@@ -3,12 +3,44 @@ using System.IO;
 
 namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 {
+    public enum InStreamSource
+    {
+        Unknown,
+        FileStream,
+        CompStreamOutput
+    }
+
+
+    public class InStreamSourceInfo
+    {
+        public InStreamSource InStreamSource = InStreamSource.Unknown;
+        public ulong InStreamIndex;
+    }
+
+    public enum DecompressType
+    {
+        LZMA,
+        LZMA2,
+        PPMd,
+        BZip2,
+        BCJ,
+        BCJ2
+    }
+
+
+
     public class Coder
     {
         public byte[] Method;
         public ulong NumInStreams;
         public ulong NumOutStreams;
         public byte[] Properties;
+
+        /************Local Variables***********/
+        public DecompressType DecoderType;
+        public bool OutputUsedInternally = false;
+        public InStreamSourceInfo[] InputStreamsSourceInfo;
+        public Stream decoderStream;
 
         public void Read(BinaryReader br)
         {
@@ -39,6 +71,18 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             }
             if ((flags & 0x80) != 0)
                 throw new NotSupportedException("External flag");
+
+            if (Method.Length == 3 && Method[0] == 3 && Method[1] == 1 && Method[2] == 1) DecoderType = DecompressType.LZMA;
+            if (Method.Length == 1 && Method[0] == 33) DecoderType = DecompressType.LZMA2;
+            if (Method.Length == 3 && Method[0] == 3 && Method[1] == 4 && Method[2] == 1) DecoderType = DecompressType.PPMd;
+            if (Method.Length == 3 && Method[0] == 4 && Method[1] == 2 && Method[2] == 2) DecoderType = DecompressType.BZip2;
+            if (Method.Length == 4 && Method[0] == 3 && Method[1] == 3 && Method[2] == 1 && Method[3] == 3) DecoderType = DecompressType.BCJ;
+            if (Method.Length == 4 && Method[0] == 3 && Method[1] == 3 && Method[2] == 1 && Method[3] == 27) DecoderType = DecompressType.BCJ2;
+            InputStreamsSourceInfo = new InStreamSourceInfo[NumInStreams];
+            for (uint i = 0; i < NumInStreams; i++)
+                InputStreamsSourceInfo[i] = new InStreamSourceInfo();
+
+
 
             Util.log("End : ReadCoder", -1);
         }

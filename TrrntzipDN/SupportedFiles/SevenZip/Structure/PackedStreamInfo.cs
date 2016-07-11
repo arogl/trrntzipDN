@@ -8,6 +8,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
         public ulong PackedSize;
         public ulong? Crc;
         public ulong StreamPosition;
+        public FileStream PackedStream;
 
         public static void Read(BinaryReader br, out ulong packPosition, out PackedStreamInfo[] packedStreams)
         {

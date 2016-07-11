@@ -65,10 +65,16 @@
     <Compile Include="IO\Win32Native.cs" />
     <Compile Include="SupportedFiles\SevenZip\Common\CRC.cs" />
     <Compile Include="SupportedFiles\SevenZip\Common\ICoder.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\BZip2\BZip2Constants.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\BZip2\BZip2Stream.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\BZip2\CBZip2InputStream.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\BZip2\CBZip2OutputStream.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\BZip2\CRC.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZMA\LzmaBase.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZMA\LzmaDecoder.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZMA\LzmaEncoder.cs" />
-    <Compile Include="SupportedFiles\SevenZip\Compress\LZ\IMatchFinder.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\LZMA\LzmaEncoderProperties.cs" />
+    <Compile Include="SupportedFiles\SevenZip\Compress\LZMA\LzmaStream.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZ\LzBinTree.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZ\LzInWindow.cs" />
     <Compile Include="SupportedFiles\SevenZip\Compress\LZ\LzOutWindow.cs" />
@@ -79,7 +85,6 @@
     <Compile Include="SupportedFiles\SevenZip\Filters\BCJ2Filter.cs" />
     <Compile Include="SupportedFiles\SevenZip\Filters\BCJFilter.cs" />
     <Compile Include="SupportedFiles\SevenZip\Filters\Filter.cs" />
-    <Compile Include="SupportedFiles\SevenZip\LZMACompressFile.cs" />
     <Compile Include="SupportedFiles\SevenZip\SevenZip.cs" />
     <Compile Include="SupportedFiles\SevenZip\Structure\BindPair.cs" />
     <Compile Include="SupportedFiles\SevenZip\Structure\Coder.cs" />
@@ -90,7 +95,6 @@
     <Compile Include="SupportedFiles\SevenZip\Structure\SignatureHeader.cs" />
     <Compile Include="SupportedFiles\SevenZip\Structure\StreamsInfo.cs" />
     <Compile Include="SupportedFiles\SevenZip\Structure\UnpackedStreamInfo.cs" />
-    <Compile Include="SupportedFiles\SevenZip\TesterStream.cs" />
     <Compile Include="SupportedFiles\SevenZip\Util.cs" />
     <Compile Include="ThreadReaders\ThreadCRC.cs" />
     <Compile Include="ThreadReaders\ThreadLoadBuffer.cs" />

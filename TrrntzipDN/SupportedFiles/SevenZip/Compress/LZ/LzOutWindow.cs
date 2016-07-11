@@ -1,63 +1,57 @@
-// LzOutWindow.cs
+using TrrntzipDN.SupportedFiles.SevenZip.Common;
 
 namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZ
 {
-    public class OutWindow
+    internal class OutWindow
     {
         byte[] _buffer = null;
-        uint _pos;
-        uint _windowSize = 0;
-        uint _streamPos;
+        int _windowSize = 0;
+        int _pos;
+        int _streamPos;
+        int _pendingLen;
+        int _pendingDist;
         System.IO.Stream _stream;
 
-        public uint TrainSize = 0;
+        public long Total;
+        public long Limit;
 
-        public void Create(uint windowSize)
+        public void Create(int windowSize)
         {
             if (_windowSize != windowSize)
-            {
-                // System.GC.Collect();
                 _buffer = new byte[windowSize];
-            }
+            else
+                _buffer[windowSize - 1] = 0;
             _windowSize = windowSize;
             _pos = 0;
             _streamPos = 0;
+            _pendingLen = 0;
+            Total = 0;
+            Limit = 0;
         }
 
-        public void Init(System.IO.Stream stream, bool solid)
+        public void Reset()
+        {
+            Create(_windowSize);
+        }
+
+        public void Init(System.IO.Stream stream)
         {
             ReleaseStream();
             _stream = stream;
-            if (!solid)
-            {
-                _streamPos = 0;
-                _pos = 0;
-                TrainSize = 0;
-            }
         }
 
-        public bool Train(System.IO.Stream stream)
+        public void Train(System.IO.Stream stream)
         {
             long len = stream.Length;
-            uint size = (len < _windowSize) ? (uint)len : _windowSize;
-            TrainSize = size;
+            int size = (len < _windowSize) ? (int)len : _windowSize;
             stream.Position = len - size;
-            _streamPos = _pos = 0;
-            while (size > 0)
-            {
-                uint curSize = _windowSize - _pos;
-                if (size < curSize)
-                    curSize = size;
-                int numReadBytes = stream.Read(_buffer, (int)_pos, (int)curSize);
-                if (numReadBytes == 0)
-                    return false;
-                size -= (uint)numReadBytes;
-                _pos += (uint)numReadBytes;
-                _streamPos += (uint)numReadBytes;
-                if (_pos == _windowSize)
-                    _streamPos = _pos = 0;
-            }
-            return true;
+            Total = 0;
+            Limit = size;
+            _pos = _windowSize - size;
+            CopyStream(stream, size);
+            if (_pos == _windowSize)
+                _pos = 0;
+            _streamPos = _pos;
         }
 
         public void ReleaseStream()
@@ -68,68 +62,125 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZ
 
         public void Flush()
         {
-            uint size = _pos - _streamPos;
+            if (_stream == null)
+                return;
+            int size = _pos - _streamPos;
             if (size == 0)
                 return;
-            if (_stream != null)
-                _stream.Write(_buffer, (int)_streamPos, (int)size);
+            _stream.Write(_buffer, _streamPos, size);
             if (_pos >= _windowSize)
                 _pos = 0;
             _streamPos = _pos;
         }
 
-        public void CopyBlock(uint distance, uint len)
+        public void CopyBlock(int distance, int len)
         {
-            uint l = 0;
-
-            uint pos = _pos - distance - 1;
-            if (pos >= _windowSize)
+            int size = len;
+            int pos = _pos - distance - 1;
+            if (pos < 0)
                 pos += _windowSize;
-            for (; len > 0; len--)
+            for (; size > 0 && _pos < _windowSize && Total < Limit; size--)
             {
                 if (pos >= _windowSize)
                     pos = 0;
                 _buffer[_pos++] = _buffer[pos++];
+                Total++;
                 if (_pos >= _windowSize)
                     Flush();
             }
-        }
-
-
-        public void CopyBlockRetBlock(uint distance, uint len, ref byte[] outbuffer)
-        {
-            if (outbuffer == null || outbuffer.Length < len)
-                outbuffer=new byte[len];
-
-            uint l = 0;
-
-            uint pos = _pos - distance - 1;
-            if (pos >= _windowSize)
-                pos += _windowSize;
-            for (; len > 0; len--)
-            {
-                if (pos >= _windowSize)
-                    pos = 0;
-                outbuffer[l++] = _buffer[pos];
-                _buffer[_pos++] = _buffer[pos++];
-                if (_pos >= _windowSize)
-                    Flush();
-            }
+            _pendingLen = size;
+            _pendingDist = distance;
         }
 
         public void PutByte(byte b)
         {
             _buffer[_pos++] = b;
+            Total++;
             if (_pos >= _windowSize)
                 Flush();
         }
 
-        public byte GetByte(uint distance)
+        public byte GetByte(int distance)
         {
-            uint pos = _pos - distance - 1;
-            if (pos >= _windowSize)
+            int pos = _pos - distance - 1;
+            if (pos < 0)
                 pos += _windowSize;
             return _buffer[pos];
+        }
+
+        public int CopyStream(System.IO.Stream stream, int len)
+        {
+            int size = len;
+            while (size > 0 && _pos < _windowSize && Total < Limit)
+            {
+                int curSize = _windowSize - _pos;
+                if (curSize > Limit - Total)
+                    curSize = (int)(Limit - Total);
+                if (curSize > size)
+                    curSize = size;
+                int numReadBytes = stream.Read(_buffer, _pos, curSize);
+                if (numReadBytes == 0)
+                    throw new DataErrorException();
+                size -= numReadBytes;
+                _pos += numReadBytes;
+                Total += numReadBytes;
+                if (_pos >= _windowSize)
+                    Flush();
+            }
+            return len - size;
+        }
+
+        public void SetLimit(long size)
+        {
+            Limit = Total + size;
+        }
+
+        public bool HasSpace
+        {
+            get
+            {
+                return _pos < _windowSize && Total < Limit;
+            }
+        }
+
+        public bool HasPending
+        {
+            get
+            {
+                return _pendingLen > 0;
+            }
+        }
+
+        public int Read(byte[] buffer, int offset, int count)
+        {
+            if (_streamPos >= _pos)
+                return 0;
+
+            int size = _pos - _streamPos;
+            if (size > count)
+                size = count;
+            System.Buffer.BlockCopy(_buffer, _streamPos, buffer, offset, size);
+            _streamPos += size;
+            if (_streamPos >= _windowSize)
+            {
+                _pos = 0;
+                _streamPos = 0;
+            }
+            return size;
+        }
+
+        public void CopyPending()
+        {
+            if (_pendingLen > 0)
+                CopyBlock(_pendingDist, _pendingLen);
+        }
+
+        public int AvailableBytes
+        {
+            get
+            {
+                return _pos - _streamPos;
+            }
         }
     }
 }

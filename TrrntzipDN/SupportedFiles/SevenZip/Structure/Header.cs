@@ -80,10 +80,8 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                             return ZipReturn.ZipUnsupportedCompression;
 
                         stream.Seek(baseOffset + (long)streamsInfo.PackPosition, SeekOrigin.Begin);
-                        using (Decoder decoder = new Decoder())
+                        using (LzmaStream decoder = new LzmaStream(firstFolder.Coders[0].Properties,stream))
                         {
-                            decoder.SetDecoderProperties(firstFolder.Coders[0].Properties);
-                            decoder.SetUpStream(stream);
                             ZipReturn zr = ReadHeaderOrPackedHeader(decoder, baseOffset, out header);
                             if (zr != ZipReturn.ZipGood)
                                 return zr;

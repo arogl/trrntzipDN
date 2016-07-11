@@ -228,7 +228,7 @@ namespace TrrntzipDN.SupportedFiles.ZipFile.ZLib
         internal short[] prev;
         // Link to older string with same hash index. To limit the size of this
         // array to 64K, this link is maintained only for the last 32K strings.
-        // An index in this array is thus a window index modulo 32K.
+        // An index in this array is thus a window InStreamIndex modulo 32K.
 
         internal short[] head;  // Heads of the hash chains or NIL.
 

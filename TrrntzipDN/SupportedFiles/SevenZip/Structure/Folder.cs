@@ -9,6 +9,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public Coder[] Coders;
         public BindPair[] BindPairs;
+        public ulong PackedStreamIndexBase;
         public ulong[] PackedStreamIndices;
         public ulong[] UnpackedStreamSizes;
         public uint? UnpackCRC;
@@ -149,11 +150,14 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                                 case 0:
                                     {
                                         Util.log("Looping Folders Begin", 1);
+                                        ulong folderIndex = 0;
                                         for (uint i = 0; i < numFolders; i++)
                                         {
                                             Util.log("Looping Folders : " + i);
                                             Folders[i] = new Folder();
                                             Folders[i].ReadFolder(br);
+                                            Folders[i].PackedStreamIndexBase = folderIndex;
+                                            folderIndex += (ulong)Folders[i].PackedStreamIndices.Length;
                                         }
                                         Util.log("Looping Folders End", -1);
                                         break;

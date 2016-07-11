@@ -114,7 +114,7 @@ namespace TrrntzipDN
                 foreach (FileInfo file in fileInfo)
                 {
                     string ext = Path.GetExtension(file.FullName);
-                    if (!string.IsNullOrEmpty(ext) && ext.ToLower() == ".zip")
+                    if (!string.IsNullOrEmpty(ext) && (ext.ToLower() ==".zip" || ext.ToLower()==".7z"))
                     {
                         tz.Process(new IO.FileInfo(file.FullName));
                     }

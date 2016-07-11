@@ -399,7 +399,7 @@ namespace IO
         /*
         private static void CheckInvalidPathChars(string path)
         {
-            for (int index = 0; index < path.Length; ++index)
+            for (int index = 0; InStreamIndex < path.Length; ++InStreamIndex)
             {
                 int num = path[index];
                 switch (num)
@@ -487,7 +487,7 @@ namespace IO
 
         // errorMessage = new Win32Exception(errorCode).Message;
 
-        public static int OpenFileRead(string path, out System.IO.Stream stream)
+        public static int OpenFileRead(string path, out System.IO.FileStream stream)
         {
 
             string filename = NameFix.AddLongPathPrefix(path);
@@ -508,7 +508,7 @@ namespace IO
             return 0;
         }
 
-        public static int OpenFileWrite(string path, out System.IO.Stream stream)
+        public static int OpenFileWrite(string path, out System.IO.FileStream stream)
         {
             string filename = NameFix.AddLongPathPrefix(path);
             SafeFileHandle hFile = Win32Native.CreateFile(filename,

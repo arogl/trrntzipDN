@@ -16,13 +16,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
         private int outputOffset = 0;
         private int outputCount = 0;
 
-        private byte[] control;
-        private byte[] data1;
-        private byte[] data2;
-
-        private int controlPos = 0;
-        private int data1Pos = 0;
-        private int data2Pos = 0;
+        private Stream control;
+        private Stream data1;
+        private Stream data2;
 
         private ushort[] p = new ushort[256 + 2];
         private uint range, code;
@@ -45,7 +41,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
             return b0 == 0x0F && (b1 & 0xF0) == 0x80;
         }
 
-        public BCJ2Filter(byte[] control, byte[] data1, byte[] data2, Stream baseStream)
+        public BCJ2Filter(Stream baseStream, Stream data1, Stream data2, Stream control)
         {
             this.control = control;
             this.data1 = data1;
@@ -58,8 +54,12 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
 
             code = 0;
             range = 0xFFFFFFFF;
+
+            byte[] controlbuf=new byte[5];
+            control.Read(controlbuf, 0, 5);
+
             for (i = 0; i < 5; i++)
-                code = (code << 8) | control[controlPos++];
+                code = (code << 8) | controlbuf[i];
         }
 
         public override bool CanRead
@@ -133,7 +133,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
                 buffer[offset++] = b;
                 size++;
                 position++;
-                
+
                 if (!IsJ(prevByte, b))
                     prevByte = b;
                 else
@@ -154,7 +154,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
                         if (range < kTopValue)
                         {
                             range <<= 8;
-                            code = (code << 8) | control[controlPos++];
+                            code = (code << 8) | (byte)control.ReadByte(); 
                         }
                         prevByte = b;
                     }
@@ -166,14 +166,14 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
                         if (range < kTopValue)
                         {
                             range <<= 8;
-                            code = (code << 8) | control[controlPos++];
+                            code = (code << 8) | (byte)control.ReadByte();
                         }
 
                         uint dest;
                         if (b == 0xE8)
-                            dest = (uint)((data1[data1Pos++] << 24) | (data1[data1Pos++] << 16) | (data1[data1Pos++] << 8) | data1[data1Pos++]);
+                            dest = (uint)((data1.ReadByte() << 24) | (data1.ReadByte() << 16) | (data1.ReadByte() << 8) | data1.ReadByte());
                         else
-                            dest = (uint)((data2[data2Pos++] << 24) | (data2[data2Pos++] << 16) | (data2[data2Pos++] << 8) | data2[data2Pos++]);
+                            dest = (uint)((data2.ReadByte() << 24) | (data2.ReadByte() << 16) | (data2.ReadByte() << 8) | data2.ReadByte());
                         dest -= (uint)(position + 4);
 
                         output[0] = (byte)dest;
@@ -191,7 +191,19 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Filters
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            throw new NotImplementedException();
+            if (origin != SeekOrigin.Current)
+                throw new NotImplementedException();
+
+            const int bufferSize = 10240;
+            byte[] seekBuffer = new byte[bufferSize];
+            long seekToGo = offset;
+            while (seekToGo > 0)
+            {
+                long get = seekToGo > bufferSize ? bufferSize : seekToGo;
+                Read(seekBuffer, 0, (int)get);
+                seekToGo -= get;
+            }
+            return position;
         }
 
         public override void SetLength(long value)

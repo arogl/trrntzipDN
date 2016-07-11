@@ -1,13 +1,10 @@
-// LzmaDecoder.cs
-
 using System;
-using System.IO;
 using TrrntzipDN.SupportedFiles.SevenZip.Common;
 using TrrntzipDN.SupportedFiles.SevenZip.Compress.RangeCoder;
 
 namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
 {
-    public class Decoder : Stream, ICoder, ISetDecoderProperties
+    internal class Decoder : ICoder, ISetDecoderProperties // ,System.IO.Stream
     {
         class LenDecoder
         {
@@ -133,8 +130,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
             { return m_Coders[GetState(pos, prevByte)].DecodeWithMatchByte(rangeDecoder, matchByte); }
         };
 
-        LZ.OutWindow m_OutWindow = new LZ.OutWindow();
-        RangeCoder.Decoder m_RangeDecoder = new RangeCoder.Decoder();
+        LZ.OutWindow m_OutWindow;
 
         BitDecoder[] m_IsMatchDecoders = new BitDecoder[Base.kNumStates << Base.kNumPosStatesBitsMax];
         BitDecoder[] m_IsRepDecoders = new BitDecoder[Base.kNumStates];
@@ -153,27 +149,27 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
 
         LiteralDecoder m_LiteralDecoder = new LiteralDecoder();
 
-        uint m_DictionarySize;
-        uint m_DictionarySizeCheck;
+        int m_DictionarySize;
 
         uint m_PosStateMask;
 
+        Base.State state = new Base.State();
+        uint rep0, rep1, rep2, rep3;
+
         public Decoder()
         {
-            m_DictionarySize = 0xFFFFFFFF;
+            m_DictionarySize = -1;
             for (int i = 0; i < Base.kNumLenToPosStates; i++)
                 m_PosSlotDecoder[i] = new BitTreeDecoder(Base.kNumPosSlotBits);
         }
 
-        void SetDictionarySize(uint dictionarySize)
+        void CreateDictionary()
         {
-            if (m_DictionarySize != dictionarySize)
-            {
-                m_DictionarySize = dictionarySize;
-                m_DictionarySizeCheck = Math.Max(m_DictionarySize, 1);
-                uint blockSize = Math.Max(m_DictionarySizeCheck, (1 << 12));
-                m_OutWindow.Create(blockSize);
-            }
+            if (m_DictionarySize < 0)
+                throw new InvalidParamException();
+            m_OutWindow = new LZ.OutWindow();
+            int blockSize = Math.Max(m_DictionarySize, (1 << 12));
+            m_OutWindow.Create(blockSize);
         }
 
         void SetLiteralProperties(int lp, int lc)
@@ -195,12 +191,8 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
             m_PosStateMask = numPosStates - 1;
         }
 
-        bool _solid = false;
-        void Init(Stream inStream, Stream outStream)
+        void Init()
         {
-            m_RangeDecoder.Init(inStream);
-            m_OutWindow.Init(outStream, _solid);
-
             uint i;
             for (i = 0; i < Base.kNumStates; i++)
             {
@@ -226,129 +218,139 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
             m_LenDecoder.Init();
             m_RepLenDecoder.Init();
             m_PosAlignDecoder.Init();
+
+            state.Init();
+            rep0 = 0;
+            rep1 = 0;
+            rep2 = 0;
+            rep3 = 0;
         }
 
-        public void Code(Stream inStream, Stream outStream, Int64 inSize, Int64 outSize, ICodeProgress progress)
+        public void Code(System.IO.Stream inStream, System.IO.Stream outStream,
+            Int64 inSize, Int64 outSize, ICodeProgress progress)
         {
-            Init(inStream, outStream);
+            if (m_OutWindow == null)
+                CreateDictionary();
+            m_OutWindow.Init(outStream);
+            if (outSize > 0)
+                m_OutWindow.SetLimit(outSize);
+            else
+                m_OutWindow.SetLimit(Int64.MaxValue - m_OutWindow.Total);
 
-            Base.State state = new Base.State();
-            state.Init();
-            uint rep0 = 0, rep1 = 0, rep2 = 0, rep3 = 0;
+            RangeCoder.Decoder rangeDecoder = new RangeCoder.Decoder();
+            rangeDecoder.Init(inStream);
 
-            UInt64 nowPos64 = 0;
-            UInt64 outSize64 = (UInt64)outSize;
-            if (nowPos64 < outSize64)
+            Code(m_DictionarySize, m_OutWindow, rangeDecoder);
+
+            m_OutWindow.ReleaseStream();
+            rangeDecoder.ReleaseStream();
+
+            if (!rangeDecoder.IsFinished || (inSize > 0 && rangeDecoder.Total != inSize))
+                throw new DataErrorException();
+            if (m_OutWindow.HasPending)
+                throw new DataErrorException();
+            m_OutWindow = null;
+        }
+
+        internal bool Code(int dictionarySize, LZ.OutWindow outWindow, RangeCoder.Decoder rangeDecoder)
+        {
+            int dictionarySizeCheck = Math.Max(dictionarySize, 1);
+
+            outWindow.CopyPending();
+
+            while (outWindow.HasSpace)
             {
-                if (m_IsMatchDecoders[state.Index << Base.kNumPosStatesBitsMax].Decode(m_RangeDecoder) != 0)
-                    throw new DataErrorException();
-                state.UpdateChar();
-                byte b = m_LiteralDecoder.DecodeNormal(m_RangeDecoder, 0, 0);
-                m_OutWindow.PutByte(b);
-                nowPos64++;
-            }
-            while (nowPos64 < outSize64)
-            {
-                // UInt64 next = Math.Min(nowPos64 + (1 << 18), outSize64);
-                // while(nowPos64 < next)
+                uint posState = (uint)outWindow.Total & m_PosStateMask;
+                if (m_IsMatchDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(rangeDecoder) == 0)
                 {
-                    uint posState = (uint)nowPos64 & m_PosStateMask;
-                    if (m_IsMatchDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(m_RangeDecoder) == 0)
+                    byte b;
+                    byte prevByte = outWindow.GetByte(0);
+                    if (!state.IsCharState())
+                        b = m_LiteralDecoder.DecodeWithMatchByte(rangeDecoder,
+                            (uint)outWindow.Total, prevByte, outWindow.GetByte((int)rep0));
+                    else
+                        b = m_LiteralDecoder.DecodeNormal(rangeDecoder, (uint)outWindow.Total, prevByte);
+                    outWindow.PutByte(b);
+                    state.UpdateChar();
+                }
+                else
+                {
+                    uint len;
+                    if (m_IsRepDecoders[state.Index].Decode(rangeDecoder) == 1)
                     {
-                        byte b;
-                        byte prevByte = m_OutWindow.GetByte(0);
-                        if (!state.IsCharState())
-                            b = m_LiteralDecoder.DecodeWithMatchByte(m_RangeDecoder,
-                                (uint)nowPos64, prevByte, m_OutWindow.GetByte(rep0));
+                        if (m_IsRepG0Decoders[state.Index].Decode(rangeDecoder) == 0)
+                        {
+                            if (m_IsRep0LongDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(rangeDecoder) == 0)
+                            {
+                                state.UpdateShortRep();
+                                outWindow.PutByte(outWindow.GetByte((int)rep0));
+                                continue;
+                            }
+                        }
                         else
-                            b = m_LiteralDecoder.DecodeNormal(m_RangeDecoder, (uint)nowPos64, prevByte);
-                        m_OutWindow.PutByte(b);
-                        state.UpdateChar();
-                        nowPos64++;
+                        {
+                            UInt32 distance;
+                            if (m_IsRepG1Decoders[state.Index].Decode(rangeDecoder) == 0)
+                            {
+                                distance = rep1;
+                            }
+                            else
+                            {
+                                if (m_IsRepG2Decoders[state.Index].Decode(rangeDecoder) == 0)
+                                    distance = rep2;
+                                else
+                                {
+                                    distance = rep3;
+                                    rep3 = rep2;
+                                }
+                                rep2 = rep1;
+                            }
+                            rep1 = rep0;
+                            rep0 = distance;
+                        }
+                        len = m_RepLenDecoder.Decode(rangeDecoder, posState) + Base.kMatchMinLen;
+                        state.UpdateRep();
                     }
                     else
                     {
-                        uint len;
-                        if (m_IsRepDecoders[state.Index].Decode(m_RangeDecoder) == 1)
+                        rep3 = rep2;
+                        rep2 = rep1;
+                        rep1 = rep0;
+                        len = Base.kMatchMinLen + m_LenDecoder.Decode(rangeDecoder, posState);
+                        state.UpdateMatch();
+                        uint posSlot = m_PosSlotDecoder[Base.GetLenToPosState(len)].Decode(rangeDecoder);
+                        if (posSlot >= Base.kStartPosModelIndex)
                         {
-                            if (m_IsRepG0Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                            {
-                                if (m_IsRep0LongDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(m_RangeDecoder) == 0)
-                                {
-                                    state.UpdateShortRep();
-                                    m_OutWindow.PutByte(m_OutWindow.GetByte(rep0));
-                                    nowPos64++;
-                                    continue;
-                                }
-                            }
+                            int numDirectBits = (int)((posSlot >> 1) - 1);
+                            rep0 = ((2 | (posSlot & 1)) << numDirectBits);
+                            if (posSlot < Base.kEndPosModelIndex)
+                                rep0 += BitTreeDecoder.ReverseDecode(m_PosDecoders,
+                                        rep0 - posSlot - 1, rangeDecoder, numDirectBits);
                             else
                             {
-                                UInt32 distance;
-                                if (m_IsRepG1Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                                {
-                                    distance = rep1;
-                                }
-                                else
-                                {
-                                    if (m_IsRepG2Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                                        distance = rep2;
-                                    else
-                                    {
-                                        distance = rep3;
-                                        rep3 = rep2;
-                                    }
-                                    rep2 = rep1;
-                                }
-                                rep1 = rep0;
-                                rep0 = distance;
+                                rep0 += (rangeDecoder.DecodeDirectBits(
+                                    numDirectBits - Base.kNumAlignBits) << Base.kNumAlignBits);
+                                rep0 += m_PosAlignDecoder.ReverseDecode(rangeDecoder);
                             }
-                            len = m_RepLenDecoder.Decode(m_RangeDecoder, posState) + Base.kMatchMinLen;
-                            state.UpdateRep();
                         }
                         else
-                        {
-                            rep3 = rep2;
-                            rep2 = rep1;
-                            rep1 = rep0;
-                            len = Base.kMatchMinLen + m_LenDecoder.Decode(m_RangeDecoder, posState);
-                            state.UpdateMatch();
-                            uint posSlot = m_PosSlotDecoder[Base.GetLenToPosState(len)].Decode(m_RangeDecoder);
-                            if (posSlot >= Base.kStartPosModelIndex)
-                            {
-                                int numDirectBits = (int)((posSlot >> 1) - 1);
-                                rep0 = ((2 | (posSlot & 1)) << numDirectBits);
-                                if (posSlot < Base.kEndPosModelIndex)
-                                    rep0 += BitTreeDecoder.ReverseDecode(m_PosDecoders,
-                                            rep0 - posSlot - 1, m_RangeDecoder, numDirectBits);
-                                else
-                                {
-                                    rep0 += (m_RangeDecoder.DecodeDirectBits(
-                                        numDirectBits - Base.kNumAlignBits) << Base.kNumAlignBits);
-                                    rep0 += m_PosAlignDecoder.ReverseDecode(m_RangeDecoder);
-                                }
-                            }
-                            else
-                                rep0 = posSlot;
-                        }
-                        if (rep0 >= m_OutWindow.TrainSize + nowPos64 || rep0 >= m_DictionarySizeCheck)
-                        {
-                            if (rep0 == 0xFFFFFFFF)
-                                break;
-                            throw new DataErrorException();
-                        }
-                        m_OutWindow.CopyBlock(rep0, len);
-                        nowPos64 += len;
+                            rep0 = posSlot;
                     }
+                    if (rep0 >= outWindow.Total || rep0 >= dictionarySizeCheck)
+                    {
+                        if (rep0 == 0xFFFFFFFF)
+                            return true;
+                        throw new DataErrorException();
+                    }
+                    outWindow.CopyBlock((int)rep0, (int)len);
                 }
             }
-            m_OutWindow.Flush();
-            m_OutWindow.ReleaseStream();
-            m_RangeDecoder.ReleaseStream();
+            return false;
         }
 
         public void SetDecoderProperties(byte[] properties)
         {
-            if (properties.Length < 5)
+            if (properties.Length < 1)
                 throw new InvalidParamException();
             int lc = properties[0] % 9;
             int remainder = properties[0] / 9;
@@ -356,242 +358,47 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA
             int pb = remainder / 5;
             if (pb > Base.kNumPosStatesBitsMax)
                 throw new InvalidParamException();
-            UInt32 dictionarySize = 0;
-            for (int i = 0; i < 4; i++)
-                dictionarySize += ((UInt32)(properties[1 + i])) << (i * 8);
-            SetDictionarySize(dictionarySize);
             SetLiteralProperties(lp, lc);
             SetPosBitsProperties(pb);
-        }
-
-        public bool Train(System.IO.Stream stream)
-        {
-            _solid = true;
-            return m_OutWindow.Train(stream);
-        }
-
-
-
-
-
-        private Base.State state;
-        private uint rep0, rep1, rep2, rep3;
-        private UInt64 nowPos64;
-        private bool init;
-
-        private byte[] outbuffer;
-        private uint outbufferpos;
-        private uint outbufferlen;
-        private uint totalout;
-        public void SetUpStream(Stream inStream)
-        {
-            Init(inStream, null);
-
-            state = new Base.State();
-            state.Init();
-
-            rep0 = 0;
-            rep1 = 0;
-            rep2 = 0;
-            rep3 = 0;
-            nowPos64 = 0;
-
-            init = false;
-            outbufferpos = 0;
-            outbufferlen = 0;
-            totalout = 0;
-        }
-        public void ReleaseStream()
-        {
-            m_RangeDecoder.ReleaseStream();
-        }
-
-        private void GetNextBytes()
-        {
-            if (!init)
+            Init();
+            if (properties.Length >= 5)
             {
-                if (m_IsMatchDecoders[state.Index << Base.kNumPosStatesBitsMax].Decode(m_RangeDecoder) != 0)
-                    throw new DataErrorException();
-                state.UpdateChar();
-                byte b = m_LiteralDecoder.DecodeNormal(m_RangeDecoder, 0, 0);
-                m_OutWindow.PutByte(b);
-                nowPos64++;
-                init = true;
-
-                outbuffer=new byte[1];
-                outbuffer[0] = b;
-                outbufferlen = 1;
-                return;
+                m_DictionarySize = 0;
+                for (int i = 0; i < 4; i++)
+                    m_DictionarySize += properties[1 + i] << (i * 8);
             }
-
-            uint posState = (uint)nowPos64 & m_PosStateMask;
-            if (m_IsMatchDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(m_RangeDecoder) == 0)
-            {
-                byte b;
-                byte prevByte = m_OutWindow.GetByte(0);
-                if (!state.IsCharState())
-                    b = m_LiteralDecoder.DecodeWithMatchByte(m_RangeDecoder,
-                        (uint)nowPos64, prevByte, m_OutWindow.GetByte(rep0));
-                else
-                    b = m_LiteralDecoder.DecodeNormal(m_RangeDecoder, (uint)nowPos64, prevByte);
-                m_OutWindow.PutByte(b);
-                state.UpdateChar();
-                nowPos64++;
-
-                outbuffer[0] = b;
-                outbufferlen = 1;
-                return;
-
-            }
-            uint len;
-            if (m_IsRepDecoders[state.Index].Decode(m_RangeDecoder) == 1)
-            {
-                if (m_IsRepG0Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                {
-                    if (m_IsRep0LongDecoders[(state.Index << Base.kNumPosStatesBitsMax) + posState].Decode(m_RangeDecoder) == 0)
-                    {
-                        state.UpdateShortRep();
-                        byte b = m_OutWindow.GetByte(rep0);
-                        m_OutWindow.PutByte(b);
-                        nowPos64++;
-
-                        outbuffer[0] = b;
-                        outbufferlen = 1;
-                        return;
-                    }
-                }
-                else
-                {
-                    UInt32 distance;
-                    if (m_IsRepG1Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                    {
-                        distance = rep1;
-                    }
-                    else
-                    {
-                        if (m_IsRepG2Decoders[state.Index].Decode(m_RangeDecoder) == 0)
-                            distance = rep2;
-                        else
-                        {
-                            distance = rep3;
-                            rep3 = rep2;
-                        }
-                        rep2 = rep1;
-                    }
-                    rep1 = rep0;
-                    rep0 = distance;
-                }
-                len = m_RepLenDecoder.Decode(m_RangeDecoder, posState) + Base.kMatchMinLen;
-                state.UpdateRep();
-            }
-            else
-            {
-                rep3 = rep2;
-                rep2 = rep1;
-                rep1 = rep0;
-                len = Base.kMatchMinLen + m_LenDecoder.Decode(m_RangeDecoder, posState);
-                state.UpdateMatch();
-                uint posSlot = m_PosSlotDecoder[Base.GetLenToPosState(len)].Decode(m_RangeDecoder);
-                if (posSlot >= Base.kStartPosModelIndex)
-                {
-                    int numDirectBits = (int)((posSlot >> 1) - 1);
-                    rep0 = ((2 | (posSlot & 1)) << numDirectBits);
-                    if (posSlot < Base.kEndPosModelIndex)
-                        rep0 += BitTreeDecoder.ReverseDecode(m_PosDecoders,
-                                rep0 - posSlot - 1, m_RangeDecoder, numDirectBits);
-                    else
-                    {
-                        rep0 += (m_RangeDecoder.DecodeDirectBits(
-                            numDirectBits - Base.kNumAlignBits) << Base.kNumAlignBits);
-                        rep0 += m_PosAlignDecoder.ReverseDecode(m_RangeDecoder);
-                    }
-                }
-                else
-                    rep0 = posSlot;
-            }
-            if (rep0 >= m_OutWindow.TrainSize + nowPos64 || rep0 >= m_DictionarySizeCheck)
-            {
-                if (rep0 == 0xFFFFFFFF)
-                    return;
-                throw new DataErrorException();
-            }
-            m_OutWindow.CopyBlockRetBlock(rep0, len, ref outbuffer);
-            outbufferlen = len;
-            nowPos64 += len;
         }
 
-        public override void Flush()
+        public void Train(System.IO.Stream stream)
         {
-            throw new NotImplementedException();
+            if (m_OutWindow == null)
+                CreateDictionary();
+            m_OutWindow.Train(stream);
         }
 
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            if (origin != SeekOrigin.Current)
-                throw new NotImplementedException();
-
-            for (int i = 0; i < offset; i++)
-            {
-                if (outbufferpos == outbufferlen)
-                {
-                    GetNextBytes();
-                    outbufferpos = 0;
-                }
-                outbufferpos++;
-                totalout++;
-            }
-            return totalout;
-        }
-
-        public override void SetLength(long value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                if (outbufferpos == outbufferlen)
-                {
-                    GetNextBytes();
-                    outbufferpos = 0;
-                }
-                buffer[offset + i] = outbuffer[outbufferpos++];
-                totalout++;
-            }
-            return count;
-        }
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override bool CanRead
-        {
-            get { return true; }
-        }
-
-        public override bool CanSeek
-        {
-            get { throw new NotImplementedException(); }
-        }
-
-        public override bool CanWrite
-        {
-            get { return false; }
-        }
-
-        public override long Length
-        {
-            get { throw new NotImplementedException(); }
-        }
-
+        /*
+        public override bool CanRead { get { return true; }}
+        public override bool CanWrite { get { return true; }}
+        public override bool CanSeek { get { return true; }}
+        public override long Length { get { return 0; }}
         public override long Position
         {
-            get { return totalout; }
+            get { return 0;	}
             set { }
         }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) 
+        {
+            return 0;
+        }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+        }
+        public override long Seek(long offset, System.IO.SeekOrigin origin)
+        {
+            return 0;
+        }
+        public override void SetLength(long value) {}
+        */
     }
 }

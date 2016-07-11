@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using TrrntzipDN.SupportedFiles;
+using TrrntzipDN.SupportedFiles.SevenZip;
 using TrrntzipDN.SupportedFiles.ZipFile;
 
 
