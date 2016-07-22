@@ -4,9 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using SharpCompress.Compressor.BZip2;
 using TrrntzipDN.SupportedFiles.SevenZip.Common;
+using TrrntzipDN.SupportedFiles.SevenZip.Compress.BZip2;
 using TrrntzipDN.SupportedFiles.SevenZip.Compress.LZMA;
+using TrrntzipDN.SupportedFiles.SevenZip.Compress.PPmd;
 using TrrntzipDN.SupportedFiles.SevenZip.Filters;
 using TrrntzipDN.SupportedFiles.SevenZip.Structure;
 using CRC = TrrntzipDN.SupportedFiles.SevenZip.Common.CRC;
@@ -469,9 +470,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
                             case DecompressType.LZMA2:
                                 coder.decoderStream = new LzmaStream(folder.Coders[i].Properties, inputCoders[0]);
                                 break;
-                            //case DecompressType.PPMd:
-                            //    coder.decoderStream = new PpmdStream(folder.Coders[i].Properties,inputCoders[0],false);
-                            //    break;
+                            case DecompressType.PPMd:
+                                coder.decoderStream = new PpmdStream(new PpmdProperties(folder.Coders[i].Properties),inputCoders[0],false);
+                                break;
                             case DecompressType.BZip2:
                                 coder.decoderStream = new BZip2Stream(inputCoders[0],CompressionMode.Decompress,true);
                                 break;

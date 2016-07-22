@@ -1,7 +1,7 @@
 ﻿using System.IO;
 using System.IO.Compression;
 
-namespace SharpCompress.Compressor.BZip2
+namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.BZip2
 {
     public class BZip2Stream : Stream
     {

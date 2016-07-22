@@ -20,7 +20,7 @@
  * great code.
  */
 
-namespace SharpCompress.Compressor.BZip2
+namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.BZip2
 {
     /**
     * Base class for both the compress and decompress classes.

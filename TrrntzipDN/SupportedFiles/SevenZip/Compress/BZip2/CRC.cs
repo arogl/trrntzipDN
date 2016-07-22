@@ -21,7 +21,7 @@
  * great code.
  */
 
-namespace SharpCompress.Compressor.BZip2
+namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.BZip2
 {
     /**
       * A simple class the hold and calculate the CRC for sanity checking

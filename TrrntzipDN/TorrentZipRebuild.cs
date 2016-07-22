@@ -21,7 +21,7 @@ namespace TrrntzipDN
             if (IO.File.Exists(tmpFilename))
                 IO.File.Delete(tmpFilename);
 
-            ICompress zipFileOut = new ZipFile();
+            ICompress zipFileOut = new SevenZ();
 
             zipFileOut.ZipFileCreate(tmpFilename);
 

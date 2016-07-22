@@ -52,7 +52,7 @@ namespace TrrntzipDN
 
         private TrrntZipStatus OpenZip(IO.FileInfo fi, out ICompress zipFile)
         {
-            zipFile = new ZipFile();
+            zipFile = new SevenZ();
             ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, true);
             if (zr != ZipReturn.ZipGood)
                 return TrrntZipStatus.CorruptZip;

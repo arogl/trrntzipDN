@@ -1,4 +1,5 @@
 ﻿using System.IO;
+
 /*
  * Copyright 2001,2004-2005 The Apache Software Foundation
  *
@@ -21,7 +22,7 @@
  * great code.
  */
 
-namespace SharpCompress.Compressor.BZip2
+namespace TrrntzipDN.SupportedFiles.SevenZip.Compress.BZip2
 {
     /**
       * An output stream that compresses into the BZip2 format (with the file
