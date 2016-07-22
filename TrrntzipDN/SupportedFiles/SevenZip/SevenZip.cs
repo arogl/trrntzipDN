@@ -113,12 +113,12 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
                 return ZipReturn.ZipSignatureError;
 
             _baseOffset = _zipFs.Position;
-            
-            _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
-            byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
-            _zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
-            if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
-                return ZipReturn.Zip64EndOfCentralDirError;
+
+            //_zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
+            //byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
+            //_zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
+            //if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
+            //    return ZipReturn.Zip64EndOfCentralDirError;
 
             _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
             ZipReturn zr = Header.ReadHeaderOrPackedHeader(_zipFs, _baseOffset, out _header);
@@ -126,7 +126,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
                 return zr;
 
             _zipFs.Seek(_baseOffset + (long)(signatureHeader.NextHeaderOffset + signatureHeader.NextHeaderSize), SeekOrigin.Begin);
-            _pZipStatus = Istorrent7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
+
+            _pZipStatus = IsRomVault7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
+            //_pZipStatus = Istorrent7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
             PopulateLocalFiles(out _localFiles);
 
             return ZipReturn.ZipGood;
@@ -207,7 +209,58 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
 
         private Header _header;
 
+        private void WriteRomVault7Zip(BinaryWriter bw, ulong headerPos, ulong headerLength, uint headerCRC)
+        {
+            const string sig = "RomVault7Zip";
+            byte[] RV7Zid = Util.Enc.GetBytes(sig);
 
+            // RomVault 7Zip torrent header
+            // 12 bytes :  RomVault7Zip
+            //  4 bytes :  HeaderCRC
+            //  8 bytes :  HeaderPos
+            //  8 bytes :  HeaderLength
+
+            bw.Write(RV7Zid);
+            bw.Write(headerCRC);
+            bw.Write(headerPos);
+            bw.Write(headerLength);
+        }
+
+
+        private bool IsRomVault7Z()
+        {
+            long length = _zipFs.Length;
+            if (length < 32)
+                return false;
+
+            _zipFs.Seek(length - 32, SeekOrigin.Begin);
+
+            const string sig = "RomVault7Zip";
+            byte[] RV7Zid = Util.Enc.GetBytes(sig);
+
+            byte[] header=new byte[12];
+            _zipFs.Read(header, 0, 12);
+            for (int i = 0; i < 12; i++)
+            {
+                if (header[i] != RV7Zid[i])
+                    return false;
+            }
+            
+            BinaryReader br = new BinaryReader(_zipFs);
+            uint HeaderCRC = br.ReadUInt32();
+            ulong HeaderOffset = br.ReadUInt64();
+            ulong HeaderSize = br.ReadUInt64();
+
+            if ((ulong)length < HeaderOffset)
+                return false;
+
+            _zipFs.Seek((long)HeaderOffset, SeekOrigin.Begin);
+
+            byte[] mainHeader = new byte[HeaderSize];
+            int bytesread=_zipFs.Read(mainHeader, 0, (int)HeaderSize);
+
+            return (ulong)bytesread == HeaderSize && CRC.VerifyDigest(HeaderCRC, mainHeader, 0, (uint)HeaderSize);
+        }
 
         private bool Istorrent7Z()
         {
@@ -659,11 +712,12 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
 
             _signatureHeader.WriteFinal(bw, headerpos, (ulong)newHeaderByte.Length, mainHeaderCRC);
 
+            WriteRomVault7Zip(bw, headerpos, (ulong)newHeaderByte.Length, mainHeaderCRC);
+
             _zipFs.Flush();
             _zipFs.Close();
             _zipFs.Dispose();
         }
-
 
 
 
