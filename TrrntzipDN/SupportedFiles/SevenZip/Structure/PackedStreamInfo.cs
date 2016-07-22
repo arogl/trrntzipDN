@@ -12,13 +12,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public static void Read(BinaryReader br, out ulong packPosition, out PackedStreamInfo[] packedStreams)
         {
-            Util.log("Begin : ReadPackInfo", 1);
-
             packPosition = br.ReadEncodedUInt64();
-            Util.log("PackPosition = " + packPosition);
 
             ulong numPackStreams = br.ReadEncodedUInt64();
-            Util.log("NumPackStreams = " + numPackStreams);
 
             packedStreams = new PackedStreamInfo[numPackStreams];
             for (ulong i = 0; i < numPackStreams; i++)
@@ -29,16 +25,13 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             for (; ; )
             {
                 HeaderProperty hp = (HeaderProperty)br.ReadByte();
-                Util.log("HeaderProperty = " + hp);
                 switch (hp)
                 {
                     case HeaderProperty.kSize:
                         for (ulong i = 0; i < numPackStreams; i++)
                         {
                             packedStreams[i].StreamPosition = streamPosition;
-                            Util.log("PackdStream[" + i + "].StreamPosition = " + packedStreams[i].StreamPosition);
                             packedStreams[i].PackedSize = br.ReadEncodedUInt64();
-                            Util.log("PackdStream[" + i + "].PackedSize = " + packedStreams[i].PackedSize);
                             streamPosition += packedStreams[i].PackedSize;
                         }
                         continue;
@@ -47,12 +40,10 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                         for (ulong i = 0; i < numPackStreams; i++)
                         {
                             packedStreams[i].Crc = br.ReadEncodedUInt64();
-                            Util.log("PackdStream[" + i + "].CRC = " + ((ulong)packedStreams[i].Crc).ToString("X"));
                         }
                         continue;
 
                     case HeaderProperty.kEnd:
-                        Util.log("End : ReadPackInfo", -1);
                         return;
 
                     default:

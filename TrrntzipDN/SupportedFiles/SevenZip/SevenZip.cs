@@ -112,15 +112,13 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             if (!signatureHeader.Read(new BinaryReader(_zipFs)))
                 return ZipReturn.ZipSignatureError;
 
-            _baseOffset = _zipFs.Position; Util.log("BaseOffset : " + _baseOffset);
-
-            Util.log("Loading Stream : " + (_baseOffset + (long)signatureHeader.NextHeaderOffset) + " , Size : " + signatureHeader.NextHeaderSize);
-
-            //_zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
-            //byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
-            //_zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
-            //if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
-            //    return ZipReturn.Zip64EndOfCentralDirError;
+            _baseOffset = _zipFs.Position;
+            
+            _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
+            byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
+            _zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
+            if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
+                return ZipReturn.Zip64EndOfCentralDirError;
 
             _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
             ZipReturn zr = Header.ReadHeaderOrPackedHeader(_zipFs, _baseOffset, out _header);
@@ -225,20 +223,21 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             byte[] buffer = new byte[tmpbufsize];
 
             // read fist 128 bytes, pad with zeros if less bytes
-            int offs = 0;
+            int bufferPos = 0;
             _zipFs.Seek(0, SeekOrigin.Begin);
-            int ar = _zipFs.Read(buffer, offs, crcsz);
+            int ar = _zipFs.Read(buffer, bufferPos, crcsz);
             if (ar < crcsz)
-                Util.memset(buffer, offs + ar, 0, crcsz - ar);
+                Util.memset(buffer, bufferPos + ar, 0, crcsz - ar);
+            bufferPos = crcsz;
 
-
-            offs = crcsz;
             long foffs = _zipFs.Length;
-            foffs = foffs < (crcsz + t7ZsigSize + 4) ? 0 : foffs - (crcsz + t7ZsigSize + 4);
+            int endReadLength = crcsz + t7ZsigSize + 4;
+            foffs = foffs < endReadLength ? 0 : foffs - endReadLength;
+
             _zipFs.Seek(foffs, SeekOrigin.Begin);
 
-            ar = _zipFs.Read(buffer, offs, (crcsz + t7ZsigSize + 4));
-            if (ar < (crcsz + t7ZsigSize + 4))
+            ar = _zipFs.Read(buffer, bufferPos, endReadLength);
+            if (ar < endReadLength)
             {
                 if (ar >= t7ZsigSize + 4)
                 {
@@ -248,8 +247,8 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
                 {
                     ar = kSignatureSize;
                 }
-                Util.memset(buffer, offs + ar, 0, crcsz - ar);
-                Util.memcpyr(buffer, crcsz * 2 + 8, buffer, offs + ar, t7ZsigSize + 4);
+                Util.memset(buffer, bufferPos + ar, 0, crcsz - ar);
+                Util.memcpyr(buffer, crcsz * 2 + 8, buffer, bufferPos + ar, t7ZsigSize + 4);
             }
             else
                 Util.memcpyr(buffer, crcsz * 2 + 8, buffer, crcsz * 2, t7ZsigSize + 4);
@@ -372,10 +371,10 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             int thisStreamIndex = _localFiles[index].StreamIndex;
             ulong streamOffset = _localFiles[index].StreamOffset;
 
-            if (thisStreamIndex == streamIndex && streamOffset >= (ulong) _stream.Position)
+            if (thisStreamIndex == streamIndex && streamOffset >= (ulong)_stream.Position)
             {
                 stream = _stream;
-                stream.Seek((long)_localFiles[index].StreamOffset-_stream.Position, SeekOrigin.Current);
+                stream.Seek((long)_localFiles[index].StreamOffset - _stream.Position, SeekOrigin.Current);
                 return ZipReturn.ZipGood;
             }
 
@@ -471,10 +470,10 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
                                 coder.decoderStream = new LzmaStream(folder.Coders[i].Properties, inputCoders[0]);
                                 break;
                             case DecompressType.PPMd:
-                                coder.decoderStream = new PpmdStream(new PpmdProperties(folder.Coders[i].Properties),inputCoders[0],false);
+                                coder.decoderStream = new PpmdStream(new PpmdProperties(folder.Coders[i].Properties), inputCoders[0], false);
                                 break;
                             case DecompressType.BZip2:
-                                coder.decoderStream = new BZip2Stream(inputCoders[0],CompressionMode.Decompress,true);
+                                coder.decoderStream = new BZip2Stream(inputCoders[0], CompressionMode.Decompress, true);
                                 break;
                             case DecompressType.BCJ:
                                 coder.decoderStream = new BCJFilter(false, inputCoders[0]);

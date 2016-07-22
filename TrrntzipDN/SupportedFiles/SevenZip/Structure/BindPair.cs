@@ -10,9 +10,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
         public void Read(BinaryReader br)
         {
             InIndex = br.ReadEncodedUInt64();
-            Util.log("InIndex = " + InIndex);
             OutIndex = br.ReadEncodedUInt64();
-            Util.log("OutIndex = " + OutIndex);
         }
 
         public void Write(BinaryWriter bw)

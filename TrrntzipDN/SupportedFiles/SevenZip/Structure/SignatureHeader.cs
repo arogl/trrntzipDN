@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using TrrntzipDN.SupportedFiles.SevenZip.Common;
 
 namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
@@ -19,21 +18,14 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public bool Read(BinaryReader br)
         {
-            Util.log("Begin: Read Header", 1);
             byte[] signatureBytes = br.ReadBytes(6);
             if (!signatureBytes.Compare(Signature))
-            {
-                Util.log("End: Read Header signature Failed", -1);
                 return false;
-            }
 
             _major = br.ReadByte();
-            Util.log("Major = " + _major);
             _minor = br.ReadByte();
-            Util.log("Minor = " + _minor);
 
             _startHeaderCRC = br.ReadUInt32();
-            Util.log("HeaderCRC = " + _startHeaderCRC.ToString("X"));
 
             long pos = br.BaseStream.Position;
             byte[] mainHeader = new byte[8 + 8 + 4];
@@ -43,13 +35,8 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             br.BaseStream.Seek(pos, SeekOrigin.Begin);
 
             NextHeaderOffset = br.ReadUInt64();
-            Util.log("NextHeaderOffset = " + NextHeaderOffset);
             NextHeaderSize = br.ReadUInt64();
-            Util.log("NextHeaderSize = " + NextHeaderSize);
             NextHeaderCRC = br.ReadUInt32();
-            Util.log("NextHeaderCRC = " + NextHeaderCRC.ToString("X"));
-
-            Util.log("End: Read Header", -1);
             return true;
         }
 
@@ -105,7 +92,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
             CRC sigHeadercrc = new CRC();
             sigHeadercrc.Update(sigHeaderBytes, 0, (uint) sigHeaderBytes.Length);
-            UInt32 sigHeaderCRC = sigHeadercrc.GetDigest();
+            uint sigHeaderCRC = sigHeadercrc.GetDigest();
 
             bw.BaseStream.Position = _crcOffset;
             bw.Write(sigHeaderCRC); //Header CRC

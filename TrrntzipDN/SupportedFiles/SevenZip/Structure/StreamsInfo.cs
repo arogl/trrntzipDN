@@ -11,11 +11,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public void Read(BinaryReader br)
         {
-            Util.log("Begin : ReadStreamsInfo", 1);
             for (; ; )
             {
                 HeaderProperty hp = (HeaderProperty)br.ReadByte();
-                Util.log("HeaderProperty = " + hp);
                 switch (hp)
                 {
                     case HeaderProperty.kPackInfo:
@@ -31,7 +29,6 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                         continue;
 
                     case HeaderProperty.kEnd:
-                        Util.log("End : ReadStreamInfo", -1);
                         return;
 
                     default:

@@ -44,18 +44,13 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public void Read(BinaryReader br)
         {
-            Util.log("Begin : ReadCoder", 1);
-
             byte flags = br.ReadByte();
-            Util.log("Flags = " + flags.ToString("X"));
             int decompressionMethodIdSize = flags & 0xf;
             Method = br.ReadBytes(decompressionMethodIdSize);
             if ((flags & 0x10) != 0)
             {
                 NumInStreams = br.ReadEncodedUInt64();
-                Util.log("NumInStreams = " + NumInStreams);
                 NumOutStreams = br.ReadEncodedUInt64();
-                Util.log("NumOutStreams = " + NumOutStreams);
             }
             else
             {
@@ -65,9 +60,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             if ((flags & 0x20) != 0)
             {
                 ulong propSize = br.ReadEncodedUInt64();
-                Util.log("PropertiesSize = " + propSize);
                 Properties = br.ReadBytes((int)propSize);
-                Util.log("Properties = " + Properties);
             }
             if ((flags & 0x80) != 0)
                 throw new NotSupportedException("External flag");
@@ -81,10 +74,6 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             InputStreamsSourceInfo = new InStreamSourceInfo[NumInStreams];
             for (uint i = 0; i < NumInStreams; i++)
                 InputStreamsSourceInfo[i] = new InStreamSourceInfo();
-
-
-
-            Util.log("End : ReadCoder", -1);
         }
 
         public void Write(BinaryWriter bw)

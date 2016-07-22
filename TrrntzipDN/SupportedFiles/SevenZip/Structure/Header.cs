@@ -11,11 +11,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public void Read(BinaryReader br)
         {
-            Util.log("Begin : ReadHeader", 1);
             for (; ; )
             {
                 HeaderProperty hp = (HeaderProperty)br.ReadByte();
-                Util.log("HeaderProperty = " + hp);
                 switch (hp)
                 {
                     case HeaderProperty.kMainStreamsInfo:
@@ -29,7 +27,6 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                         break;
 
                     case HeaderProperty.kEnd:
-                        Util.log("End : ReadHeader", -1);
                         return;
 
                     default:
@@ -55,12 +52,10 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
         public static ZipReturn ReadHeaderOrPackedHeader(Stream stream, long baseOffset, out Header header)
         {
             header = null;
-            Util.log("Begin : ReadHeaderOrPackedHeader", 1);
 
             BinaryReader br = new BinaryReader(stream);
 
             HeaderProperty hp = (HeaderProperty)br.ReadByte();
-            Util.log("HeaderProperty = " + hp);
             switch (hp)
             {
                 case HeaderProperty.kEncodedHeader:
@@ -86,14 +81,12 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                             if (zr != ZipReturn.ZipGood)
                                 return zr;
                         }
-                        Util.log("End : ReadHeaderOrPackedHeader (Packed)", -1);
                         return ZipReturn.ZipGood;
                     }
                 case HeaderProperty.kHeader:
                     {
                         header = new Header();
                         header.Read(br);
-                        Util.log("End : ReadHeaderOrPackedHeader (UnPacked)", -1);
                         return ZipReturn.ZipGood;
                     }
             }

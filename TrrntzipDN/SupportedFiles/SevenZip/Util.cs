@@ -50,17 +50,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
         public static readonly Encoding Enc = Encoding.GetEncoding(28591);
 
         private static int indent = 0;
-        public static void log(string txt, int ind = 0)
-        {
-            if (ind < 0) indent += ind;
-            for (int i = 0; i < indent; i++)
-                Debug.Write("   ");
-            Debug.WriteLine(txt);
-            if (ind == -1)
-                Debug.WriteLine("");
-            if (ind > 0) indent += ind;
-        }
-
+     
         public static void memset(byte[] buffer, int start, byte val, int len)
         {
             for (int i = 0; i < len; i++)

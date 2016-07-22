@@ -12,8 +12,6 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
 
         public void Read(BinaryReader br)
         {
-            Util.log("Begin : ReadFileInfo", 1);
-
             ulong size = br.ReadEncodedUInt64();
             Names = new string[size];
 
@@ -22,12 +20,8 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
             for (; ; )
             {
                 HeaderProperty hp = (HeaderProperty)br.ReadByte();
-                Util.log("HeaderProperty = " + hp);
                 if (hp == HeaderProperty.kEnd)
-                {
-                    Util.log("End : ReadFileInfo", -1);
                     return;
-                }
 
                 ulong bytessize = br.ReadEncodedUInt64();
                 switch (hp)
@@ -36,39 +30,30 @@ namespace TrrntzipDN.SupportedFiles.SevenZip.Structure
                         if (br.ReadByte() != 0)
                             throw new Exception("Cannot be external");
 
-                        Util.log("Looping Names Begin " + size, 1);
                         for (ulong i = 0; i < size; i++)
-                        {
                             Names[i] = br.ReadName();
-                            Util.log("enteries[" + i + "]=" + Names[i]);
-                        }
-                        Util.log("Looping Names End " + size, -1);
+
                         continue;
 
                     case HeaderProperty.kEmptyStream:
-                        Util.log("reading EmptyStreamFlags Total=" + size);
                         EmptyStreamFlags = Util.ReadBoolFlags(br, (ulong)Names.Length);
                         for (ulong i = 0; i < size; i++)
                             if (EmptyStreamFlags[i]) numEmptyFiles++;
                         continue;
 
                     case HeaderProperty.kEmptyFile:
-                        Util.log("reading numEmptyFilesFlags Total=" + numEmptyFiles);
                         EmptyFileFlags = Util.ReadBoolFlags(br, numEmptyFiles);
                         continue;
 
                     case HeaderProperty.kWinAttributes:
-                        Util.log("skipping bytes " + bytessize);
                         Attributes = Util.ReadUInt32Def(br, size);
                         continue;
 
                     case HeaderProperty.kLastWriteTime:
-                        Util.log("skipping bytes " + bytessize);
                         br.ReadBytes((int)bytessize);
                         continue;
 
                     case HeaderProperty.kDummy:
-                        Util.log("skipping bytes " + bytessize);
                         br.ReadBytes((int)bytessize);
                         continue;
 
