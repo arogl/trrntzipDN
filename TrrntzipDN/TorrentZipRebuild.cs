@@ -22,7 +22,7 @@ namespace TrrntzipDN
             {
                 if (File.Exists(outfilename))
                 {
-                    LogCallback?.Invoke(ThreadID,"Error output .zip file already exists");
+                    LogCallback?.Invoke(ThreadID, "Error output .zip file already exists");
                     return TrrntZipStatus.RepeatFilesFound;
                 }
 
@@ -33,73 +33,85 @@ namespace TrrntzipDN
 
             ICompress zipFileOut = new ZipFile();
 
-            zipFileOut.ZipFileCreate(tmpFilename);
-
-            // by now the zippedFiles have been sorted so just loop over them
-            for (int i = 0; i < zippedFiles.Count; i++)
+            try
             {
-                StatusCallBack?.Invoke(ThreadID, (int)((double)(i + 1) / (zippedFiles.Count) * 100));
+                zipFileOut.ZipFileCreate(tmpFilename);
 
-                ZippedFile t = zippedFiles[i];
-
-                if (Program.VerboseLogging)
-                    LogCallback?.Invoke(ThreadID, $"{t.Size,15}  {t.StringCRC}   {t.Name}");
-
-                Stream readStream = null;
-                ulong streamSize = 0;
-                ushort compMethod;
-
-                ZipFile z = originalZipFile as ZipFile;
-                ZipReturn zrInput = ZipReturn.ZipUntested;
-                if (z != null)
-                    zrInput = z.ZipFileOpenReadStream(t.Index, false, out readStream, out streamSize, out compMethod);
-                SevenZ z7 = originalZipFile as SevenZ;
-                if (z7 != null)
-                    zrInput = z7.ZipFileOpenReadStream(t.Index, out readStream, out streamSize);
-
-                Stream writeStream;
-                ZipReturn zrOutput = zipFileOut.ZipFileOpenWriteStream(false, true, t.Name, streamSize, 8, out writeStream);
-
-                if (zrInput != ZipReturn.ZipGood || zrOutput != ZipReturn.ZipGood)
+                // by now the zippedFiles have been sorted so just loop over them
+                for (int i = 0; i < zippedFiles.Count; i++)
                 {
-                    //Error writing local File.
-                    zipFileOut.ZipFileClose();
-                    originalZipFile.ZipFileClose();
-                    IO.File.Delete(tmpFilename);
-                    return TrrntZipStatus.CorruptZip;
+                    StatusCallBack?.Invoke(ThreadID, (int)((double)(i + 1) / (zippedFiles.Count) * 100));
+
+                    ZippedFile t = zippedFiles[i];
+
+                    if (Program.VerboseLogging)
+                        LogCallback?.Invoke(ThreadID, $"{t.Size,15}  {t.StringCRC}   {t.Name}");
+
+                    Stream readStream = null;
+                    ulong streamSize = 0;
+                    ushort compMethod;
+
+                    ZipFile z = originalZipFile as ZipFile;
+                    ZipReturn zrInput = ZipReturn.ZipUntested;
+                    if (z != null)
+                        zrInput = z.ZipFileOpenReadStream(t.Index, false, out readStream, out streamSize, out compMethod);
+                    SevenZ z7 = originalZipFile as SevenZ;
+                    if (z7 != null)
+                        zrInput = z7.ZipFileOpenReadStream(t.Index, out readStream, out streamSize);
+
+                    Stream writeStream;
+                    ZipReturn zrOutput = zipFileOut.ZipFileOpenWriteStream(false, true, t.Name, streamSize, 8, out writeStream);
+
+                    if (zrInput != ZipReturn.ZipGood || zrOutput != ZipReturn.ZipGood)
+                    {
+                        //Error writing local File.
+                        zipFileOut.ZipFileClose();
+                        originalZipFile.ZipFileClose();
+                        IO.File.Delete(tmpFilename);
+                        return TrrntZipStatus.CorruptZip;
+                    }
+
+                    Stream crcCs = new CrcCalculatorStream(readStream, true);
+
+                    ulong sizetogo = streamSize;
+                    while (sizetogo > 0)
+                    {
+                        int sizenow = sizetogo > (ulong)bufferSize ? bufferSize : (int)sizetogo;
+
+                        crcCs.Read(buffer, 0, sizenow);
+                        writeStream.Write(buffer, 0, sizenow);
+                        sizetogo = sizetogo - (ulong)sizenow;
+                    }
+                    writeStream.Flush();
+
+                    crcCs.Close();
+                    if (z != null)
+                        originalZipFile.ZipFileCloseReadStream();
+
+                    uint crc = (uint)((CrcCalculatorStream)crcCs).Crc;
+
+                    if (crc != t.CRC)
+                        return TrrntZipStatus.CorruptZip;
+
+                    zipFileOut.ZipFileCloseWriteStream(t.ByteCRC);
                 }
 
-                Stream crcCs = new CrcCalculatorStream(readStream, true);
+                zipFileOut.ZipFileClose();
+                originalZipFile.ZipFileClose();
+                IO.File.Delete(filename);
+                IO.File.Move(tmpFilename, outfilename);
 
-                ulong sizetogo = streamSize;
-                while (sizetogo > 0)
-                {
-                    int sizenow = sizetogo > (ulong)bufferSize ? bufferSize : (int)sizetogo;
+                return TrrntZipStatus.ValidTrrntzip;
 
-                    crcCs.Read(buffer, 0, sizenow);
-                    writeStream.Write(buffer, 0, sizenow);
-                    sizetogo = sizetogo - (ulong)sizenow;
-                }
-                writeStream.Flush();
-
-                crcCs.Close();
-                if (z != null)
-                    originalZipFile.ZipFileCloseReadStream();
-
-                uint crc = (uint)((CrcCalculatorStream)crcCs).Crc;
-
-                if (crc != t.CRC)
-                    return TrrntZipStatus.CorruptZip;
-
-                zipFileOut.ZipFileCloseWriteStream(t.ByteCRC);
+            }
+            catch (Exception)
+            {
+                zipFileOut?.ZipFileCloseFailed();
+                originalZipFile?.ZipFileClose();
+                return TrrntZipStatus.CorruptZip;
             }
 
-            zipFileOut.ZipFileClose();
-            originalZipFile.ZipFileClose();
-            IO.File.Delete(filename);
-            IO.File.Move(tmpFilename,outfilename);
 
-            return TrrntZipStatus.ValidTrrntzip;
         }
     }
 }

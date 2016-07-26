@@ -107,33 +107,42 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
 
             _zipOpen = ZipOpenType.OpenRead;
             _pZipStatus = ZipStatus.None;
-
-            SignatureHeader signatureHeader = new SignatureHeader();
-            if (!signatureHeader.Read(new BinaryReader(_zipFs)))
-                return ZipReturn.ZipSignatureError;
-
-            _baseOffset = _zipFs.Position;
-
-            //_zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
-            //byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
-            //_zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
-            //if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
-            //    return ZipReturn.Zip64EndOfCentralDirError;
-
-            _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
-            ZipReturn zr = Header.ReadHeaderOrPackedHeader(_zipFs, _baseOffset, out _header);
-            if (zr != ZipReturn.ZipGood)
-                return zr;
-
-            _zipFs.Seek(_baseOffset + (long)(signatureHeader.NextHeaderOffset + signatureHeader.NextHeaderSize), SeekOrigin.Begin);
-
-            _pZipStatus=ZipStatus.None;
             
-            //_pZipStatus = IsRomVault7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
-            //_pZipStatus = Istorrent7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
-            PopulateLocalFiles(out _localFiles);
+            try
+            {
+                SignatureHeader signatureHeader = new SignatureHeader();
+                if (!signatureHeader.Read(new BinaryReader(_zipFs)))
+                    return ZipReturn.ZipSignatureError;
 
-            return ZipReturn.ZipGood;
+                _baseOffset = _zipFs.Position;
+
+                //_zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
+                //byte[] mainHeader = new byte[signatureHeader.NextHeaderSize];
+                //_zipFs.Read(mainHeader, 0, (int)signatureHeader.NextHeaderSize);
+                //if (!CRC.VerifyDigest(signatureHeader.NextHeaderCRC, mainHeader, 0, (uint)signatureHeader.NextHeaderSize))
+                //    return ZipReturn.Zip64EndOfCentralDirError;
+
+                _zipFs.Seek(_baseOffset + (long)signatureHeader.NextHeaderOffset, SeekOrigin.Begin);
+                ZipReturn zr = Header.ReadHeaderOrPackedHeader(_zipFs, _baseOffset, out _header);
+                if (zr != ZipReturn.ZipGood)
+                    return zr;
+
+                _zipFs.Seek(_baseOffset + (long)(signatureHeader.NextHeaderOffset + signatureHeader.NextHeaderSize), SeekOrigin.Begin);
+
+                _pZipStatus = ZipStatus.None;
+
+                //_pZipStatus = IsRomVault7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
+                //_pZipStatus = Istorrent7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
+                PopulateLocalFiles(out _localFiles);
+
+                return ZipReturn.ZipGood;
+
+            }
+            catch
+            {
+                ZipFileClose();
+                return ZipReturn.ZipErrorReadingFile;
+            }
         }
 
 
@@ -240,14 +249,14 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             const string sig = "RomVault7Zip";
             byte[] RV7Zid = Util.Enc.GetBytes(sig);
 
-            byte[] header=new byte[12];
+            byte[] header = new byte[12];
             _zipFs.Read(header, 0, 12);
             for (int i = 0; i < 12; i++)
             {
                 if (header[i] != RV7Zid[i])
                     return false;
             }
-            
+
             BinaryReader br = new BinaryReader(_zipFs);
             uint HeaderCRC = br.ReadUInt32();
             ulong HeaderOffset = br.ReadUInt64();
@@ -259,7 +268,7 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             _zipFs.Seek((long)HeaderOffset, SeekOrigin.Begin);
 
             byte[] mainHeader = new byte[HeaderSize];
-            int bytesread=_zipFs.Read(mainHeader, 0, (int)HeaderSize);
+            int bytesread = _zipFs.Read(mainHeader, 0, (int)HeaderSize);
 
             return (ulong)bytesread == HeaderSize && CRC.VerifyDigest(HeaderCRC, mainHeader, 0, (uint)HeaderSize);
         }
@@ -585,14 +594,15 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
             }
             streamIndex = -1;
 
-            foreach (PackedStreamInfo psi in _header.StreamsInfo.PackedStreams)
-            {
-                if (psi.PackedStream == null)
-                    continue;
-                psi.PackedStream.Close();
-                psi.PackedStream.Dispose();
-                psi.PackedStream = null;
-            }
+            if (_header != null && _header.StreamsInfo != null)
+                foreach (PackedStreamInfo psi in _header.StreamsInfo.PackedStreams)
+                {
+                    if (psi.PackedStream == null)
+                        continue;
+                    psi.PackedStream.Close();
+                    psi.PackedStream.Dispose();
+                    psi.PackedStream = null;
+                }
             return ZipReturn.ZipGood;
         }
 
