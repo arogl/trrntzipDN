@@ -18,7 +18,6 @@
  ******************************************************/
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
@@ -31,6 +30,8 @@ namespace TrrntzipDN
         public static bool CheckOnly=false;
         public static bool VerboseLogging=false;
         private static bool _guiLaunch;
+
+        private static TorrentZip tz;
 
         static void Main(string[] args)
         {
@@ -86,7 +87,10 @@ namespace TrrntzipDN
                 }
             }
 
-            TorrentZip tz = new TorrentZip();
+            tz = new TorrentZip();
+            tz.StatusCallBack = StatusCallBack;
+            tz.StatusLogCallBack = StatusLogCallBack;
+
             for (int i = 0; i < args.Length; i++)
             {
                 string arg = args[i];
@@ -105,12 +109,9 @@ namespace TrrntzipDN
                 if (string.IsNullOrEmpty(dir)) dir = Environment.CurrentDirectory;
 
                 string filename = Path.GetFileName(arg);
-                if (string.IsNullOrEmpty(filename)) filename = "*.zip";
                 
                 DirectoryInfo dirInfo = new DirectoryInfo(dir);
                 FileInfo[] fileInfo = dirInfo.GetFiles(filename);
-
-
                 foreach (FileInfo file in fileInfo)
                 {
                     string ext = Path.GetExtension(file.FullName);
@@ -128,11 +129,19 @@ namespace TrrntzipDN
             }
         }
 
+        private static void StatusCallBack(int processID, int percent)
+        {
+            Console.Write($"{percent,3}%");
+        }
+
+        private static void StatusLogCallBack(int processId, string log)
+        {
+            Console.WriteLine(log);
+        }
+
 
         private static void ProcessDir(string dirName)
         {
-            TorrentZip tz = new TorrentZip();
-
             Console.WriteLine("Checking Dir : " + dirName);
 
             DirectoryInfo di = new DirectoryInfo(dirName);
@@ -140,8 +149,8 @@ namespace TrrntzipDN
             for (int i = 0; i < fi.Length; i++)
             {
                 string filename = fi[i].FullName;
-                string extention = Path.GetExtension(filename);
-                if (!string.IsNullOrEmpty(extention) && extention.ToLower() == ".zip")
+                string ext = Path.GetExtension(filename);
+                if (!string.IsNullOrEmpty(ext) && (ext.ToLower() == ".zip" || ext.ToLower() == ".7z"))
                 {
                     tz.Process(new IO.FileInfo(filename));
                 }

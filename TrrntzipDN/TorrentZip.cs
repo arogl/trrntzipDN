@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using IO;
 using TrrntzipDN.SupportedFiles;
 using TrrntzipDN.SupportedFiles.SevenZip;
 using TrrntzipDN.SupportedFiles.ZipFile;
@@ -7,8 +7,16 @@ using TrrntzipDN.SupportedFiles.ZipFile;
 
 namespace TrrntzipDN
 {
+    public delegate void StatusCallback(int threadID, int precent);
+
+    public delegate void LogCallback(int threadID, string log);
+
     class TorrentZip
     {
+        public StatusCallback StatusCallBack;
+        public LogCallback StatusLogCallBack;
+        public int ThreadID;
+
         private readonly byte[] _buffer;
 
         public TorrentZip()
@@ -16,43 +24,53 @@ namespace TrrntzipDN
             _buffer = new byte[1024 * 1024];
         }
 
-        public bool Process(IO.FileInfo fi)
+        public TrrntZipStatus Process(FileInfo fi)
         {
-
             if (Program.VerboseLogging)
-                Console.WriteLine();
+               StatusLogCallBack?.Invoke(ThreadID,"");
 
-            Console.Write(fi.Name + " - ");
+            StatusLogCallBack?.Invoke(ThreadID, fi.Name + " - ");
+            
+            // First open the zip (7z) file, and fail out if it is corrupt.
+
             ICompress zipFile;
             TrrntZipStatus tzs = OpenZip(fi, out zipFile);
+            // this will return ValidTrrntZip or CorruptZip.
+
             if ((tzs & TrrntZipStatus.CorruptZip) == TrrntZipStatus.CorruptZip)
             {
-                Console.WriteLine("Zip file is corrupt");
-                return false;
+                StatusLogCallBack?.Invoke(ThreadID, "Zip file is corrupt");
+                return TrrntZipStatus.CorruptZip;
             }
 
-            List<ZippedFile> zippedFiles = ReadZipContent(zipFile);
+            // the zip file may have found a valid trrntzip header, but we now check that all the file info
+            // is actually valid, and may invalidate it being a valid trrntzip if any problem is found.
 
+            List<ZippedFile> zippedFiles = ReadZipContent(zipFile);
             tzs |= TorrentZipCheck.CheckZipFiles(ref zippedFiles);
+
+            // if tza is now just 'ValidTrrntzip' the it is fully valid, and nothing needs to be done to it.
 
             if (tzs == TrrntZipStatus.ValidTrrntzip && !Program.ForceReZip || Program.CheckOnly)
             {
-                Console.WriteLine("Skipping File");
-                return true;
+                StatusLogCallBack?.Invoke(ThreadID, "Skipping File");
+                return TrrntZipStatus.ValidTrrntzip;
             }
-            if (tzs != TrrntZipStatus.NotTrrntzipped && tzs != TrrntZipStatus.ValidTrrntzip)
-                Console.WriteLine("Original torrentzip file was invalid");
 
-         
-            Console.WriteLine("TorrentZipping");
-            TrrntZipStatus fixedTzs = TorrentZipRebuild.ReZipFiles(zippedFiles, zipFile, _buffer);
-            return fixedTzs == TrrntZipStatus.ValidTrrntzip;
+            StatusLogCallBack?.Invoke(ThreadID, "TorrentZipping");
+            TrrntZipStatus fixedTzs = TorrentZipRebuild.ReZipFiles(zippedFiles, zipFile, _buffer,StatusCallBack,StatusLogCallBack,ThreadID);
+            return fixedTzs;
         }
 
 
         private TrrntZipStatus OpenZip(IO.FileInfo fi, out ICompress zipFile)
         {
-            zipFile = new SevenZ();
+            string ext = Path.GetExtension(fi.Name);
+            if (ext == ".7z")
+                zipFile = new SevenZ();
+            else
+                zipFile = new ZipFile();
+
             ZipReturn zr = zipFile.ZipFileOpen(fi.FullName, fi.LastWriteTime, true);
             if (zr != ZipReturn.ZipGood)
                 return TrrntZipStatus.CorruptZip;
@@ -60,8 +78,8 @@ namespace TrrntzipDN
             TrrntZipStatus tzStatus = TrrntZipStatus.Unknown;
 
             // first check if the file is a trrntip files
-            if (zipFile.ZipStatus != ZipStatus.TrrntZip)
-                tzStatus |= TrrntZipStatus.NotTrrntzipped;
+            if (zipFile.ZipStatus == ZipStatus.TrrntZip)
+                tzStatus |= TrrntZipStatus.ValidTrrntzip;
 
             return tzStatus;
         }

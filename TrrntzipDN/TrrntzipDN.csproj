@@ -129,7 +129,7 @@
     <Compile Include="TorrentZip.cs" />
     <Compile Include="TorrentZipCheck.cs" />
     <Compile Include="TorrentZipRebuild.cs" />
-    <Compile Include="ZipEnums.cs" />
+    <Compile Include="SupportedFiles\ZipEnums.cs" />
     <Compile Include="SupportedFiles\ZipFile\zipFile.cs" />
     <Compile Include="ZippedFile.cs" />
     <Compile Include="SupportedFiles\ZipFile\ZLib\Crc32.cs" />

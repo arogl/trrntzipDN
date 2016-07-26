@@ -10,31 +10,40 @@ namespace TrrntzipDN
 {
     public static class TorrentZipRebuild
     {
-        public static TrrntZipStatus ReZipFiles(List<ZippedFile> zippedFiles, ICompress originalZipFile, byte[] buffer)
+        public static TrrntZipStatus ReZipFiles(List<ZippedFile> zippedFiles, ICompress originalZipFile, byte[] buffer, StatusCallback StatusCallBack, LogCallback LogCallback, int ThreadID)
         {
             int bufferSize = buffer.Length;
 
             string filename = originalZipFile.ZipFilename;
+            string tmpFilename = Path.GetDirectoryName(filename) + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(filename) + ".tmp";
 
-            string tmpFilename = filename + ".tmp";
+            string outfilename = Path.GetDirectoryName(filename) + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(filename) + ".zip";
+            if (Path.GetExtension(filename) == ".7z")
+            {
+                if (File.Exists(outfilename))
+                {
+                    LogCallback?.Invoke(ThreadID,"Error output .zip file already exists");
+                    return TrrntZipStatus.RepeatFilesFound;
+                }
+
+            }
 
             if (IO.File.Exists(tmpFilename))
                 IO.File.Delete(tmpFilename);
 
-            ICompress zipFileOut = new SevenZ();
+            ICompress zipFileOut = new ZipFile();
 
             zipFileOut.ZipFileCreate(tmpFilename);
 
             // by now the zippedFiles have been sorted so just loop over them
             for (int i = 0; i < zippedFiles.Count; i++)
             {
+                StatusCallBack?.Invoke(ThreadID, (int)((double)(i + 1) / (zippedFiles.Count) * 100));
+
                 ZippedFile t = zippedFiles[i];
 
                 if (Program.VerboseLogging)
-                {
-                    Console.WriteLine("{0,15}  {1}   {2}", t.Size, t.StringCRC, t.Name);
-                }
-
+                    LogCallback?.Invoke(ThreadID, $"{t.Size,15}  {t.StringCRC}   {t.Name}");
 
                 Stream readStream = null;
                 ulong streamSize = 0;
@@ -74,8 +83,8 @@ namespace TrrntzipDN
                 writeStream.Flush();
 
                 crcCs.Close();
-                if (z!=null)
-                originalZipFile.ZipFileCloseReadStream();
+                if (z != null)
+                    originalZipFile.ZipFileCloseReadStream();
 
                 uint crc = (uint)((CrcCalculatorStream)crcCs).Crc;
 
@@ -84,11 +93,11 @@ namespace TrrntzipDN
 
                 zipFileOut.ZipFileCloseWriteStream(t.ByteCRC);
             }
-            
+
             zipFileOut.ZipFileClose();
             originalZipFile.ZipFileClose();
             IO.File.Delete(filename);
-            IO.File.Move(tmpFilename, filename);
+            IO.File.Move(tmpFilename,outfilename);
 
             return TrrntZipStatus.ValidTrrntzip;
         }

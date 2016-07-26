@@ -127,7 +127,9 @@ namespace TrrntzipDN.SupportedFiles.SevenZip
 
             _zipFs.Seek(_baseOffset + (long)(signatureHeader.NextHeaderOffset + signatureHeader.NextHeaderSize), SeekOrigin.Begin);
 
-            _pZipStatus = IsRomVault7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
+            _pZipStatus=ZipStatus.None;
+            
+            //_pZipStatus = IsRomVault7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
             //_pZipStatus = Istorrent7Z() ? ZipStatus.TrrntZip : ZipStatus.None;
             PopulateLocalFiles(out _localFiles);
 

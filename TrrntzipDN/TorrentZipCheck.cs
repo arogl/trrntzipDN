@@ -148,11 +148,6 @@ namespace TrrntzipDN
                 }
             }
 
-
-            // if nothing was found wrong with the zip set it to valid trrntzip file
-            if (tzStatus == TrrntZipStatus.Unknown)
-                tzStatus = TrrntZipStatus.ValidTrrntzip;
-
             return tzStatus;
         }
 
